@@ -1,0 +1,3 @@
+# Install a compatible PaddlePaddle inference engine for the target CPU/GPU
+# platform before installing this optional group.
+paddleocr[doc-parser]>=3.0,<4.0

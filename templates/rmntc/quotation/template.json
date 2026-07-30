@@ -1,0 +1,9 @@
+{
+  "manifest_version": 1,
+  "company": "rmntc",
+  "document_type": "quotation",
+  "description": "RMNTC quotation template slot.",
+  "required_files": [],
+  "locked": false
+}
+

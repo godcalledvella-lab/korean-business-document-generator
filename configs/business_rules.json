@@ -1,0 +1,8 @@
+{
+  "pricing": {
+    "comparison_markup_rate": "0.08",
+    "decimal_places": 0,
+    "rounding": "ROUND_HALF_UP"
+  }
+}
+

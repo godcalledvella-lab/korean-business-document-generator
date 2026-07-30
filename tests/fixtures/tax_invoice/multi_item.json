@@ -1,0 +1,51 @@
+{
+  "provider": "manual-json",
+  "issue_date": {"value": "2026.07.29", "confidence": 0.99},
+  "approval_number": {"value": "20260729-87654321", "confidence": 0.99},
+  "supplier": {
+    "business_registration_number": {"value": "123-45-67890", "confidence": 0.99},
+    "company_name": {"value": "알엠엔티씨 주식회사", "confidence": 0.99},
+    "representative": {"value": "김대표", "confidence": 0.98},
+    "address": {"value": "서울특별시 강남구 테헤란로 123, 8층", "confidence": 0.97},
+    "business_type": {"value": "서비스업", "confidence": 0.98},
+    "business_category": {"value": "경영 컨설팅 및 소프트웨어 개발", "confidence": 0.97},
+    "email": {"value": null, "confidence": 0.95}
+  },
+  "buyer": {
+    "business_registration_number": {"value": "9876543210", "confidence": 0.99},
+    "company_name": {"value": "주식회사 한빛상사", "confidence": 0.99},
+    "representative": {"value": "이구매", "confidence": 0.98},
+    "address": {"value": "서울특별시 중구 세종대로 45", "confidence": 0.97},
+    "business_type": {"value": "도소매업", "confidence": 0.98},
+    "business_category": {"value": "산업용품 유통", "confidence": 0.98},
+    "email": {"value": " ", "confidence": 0.95}
+  },
+  "items": [
+    {
+      "item_name": {"value": "문서 자동화 시스템 설계", "confidence": 0.99},
+      "specification": {"value": "설계안", "confidence": 0.95},
+      "unit": {"value": "건", "confidence": 0.98},
+      "quantity": {"value": "2", "confidence": 0.99},
+      "unit_price": {"value": "750,000", "confidence": 0.99},
+      "supply_amount": {"value": "1,500,000", "confidence": 0.99},
+      "tax_amount": {"value": "150,000", "confidence": 0.99},
+      "remark": {"value": "설계안 2종", "confidence": 0.97}
+    },
+    {
+      "item_name": {"value": "운영 교육", "confidence": 0.99},
+      "specification": {"value": null, "confidence": 0.95},
+      "unit": {"value": "시간", "confidence": 0.98},
+      "quantity": {"value": "4", "confidence": 0.99},
+      "unit_price": {"value": "125 000", "confidence": 0.99},
+      "supply_amount": {"value": "500,000", "confidence": 0.99},
+      "tax_amount": {"value": "50,000", "confidence": 0.99},
+      "remark": {"value": "", "confidence": 0.97}
+    }
+  ],
+  "totals": {
+    "supply_amount": {"value": "2,000,000", "confidence": 0.99},
+    "vat": {"value": "200,000", "confidence": 0.99},
+    "grand_total": {"value": "2,200,000", "confidence": 0.99}
+  },
+  "receipt_claim_classification": {"value": "청구", "confidence": 0.96}
+}

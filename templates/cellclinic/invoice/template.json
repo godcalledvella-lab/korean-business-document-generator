@@ -1,0 +1,9 @@
+{
+  "manifest_version": 1,
+  "company": "cellclinic",
+  "document_type": "invoice",
+  "description": "Cellclinic invoice template slot.",
+  "required_files": [],
+  "locked": false
+}
+

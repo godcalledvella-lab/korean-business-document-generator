@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "company": "rmntc",
+  "document_type": "statement",
+  "description": "RMNTC Page 2 transaction statement.",
+  "entrypoint": "statement.html.j2",
+  "required_files": [
+    "statement.html.j2",
+    "assets/rmntc-earth-logo.png"
+  ],
+  "locked": false
+}

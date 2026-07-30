@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>거래명세서 {{ document.invoice_number }}</title>
+  <style>
+    :root {
+      --page-width: 793.701px;
+      --page-height: 1122.520px;
+      --art-scale: 1.15169;
+      --ink: #343335;
+      --text: #6d6c70;
+      --rule: #3f3e3f;
+      --rule-soft: #92979b;
+      --accent: #a96830;
+      --band: #f3f2ef;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #e9e9e9;
+    }
+
+    body {
+      color: var(--text);
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      position: relative;
+      width: var(--page-width);
+      height: var(--page-height);
+      margin: 20px auto;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 5px 22px rgba(0, 0, 0, 0.14);
+    }
+
+    .artboard {
+      position: absolute;
+      top: 133.986px;
+      left: 46.145px;
+      width: 609px;
+      height: 742px;
+      transform: scale(var(--art-scale));
+      transform-origin: left top;
+    }
+
+    .logo {
+      position: absolute;
+      top: 10px;
+      left: 425px;
+      width: 115px;
+      height: 55px;
+      object-fit: contain;
+    }
+
+    .title {
+      position: absolute;
+      top: 39px;
+      left: 15px;
+      margin: 0;
+      color: var(--ink);
+      font-size: 23px;
+      font-weight: 700;
+      line-height: 25px;
+      letter-spacing: -0.5px;
+    }
+
+    .header-rule,
+    .recipient-rule,
+    .total-rule,
+    .details-rule {
+      position: absolute;
+      left: 13px;
+      width: 548px;
+      margin: 0;
+      border: 0;
+    }
+
+    .header-rule {
+      top: 65px;
+      height: 2px;
+      background: var(--rule);
+    }
+
+    .issue-date {
+      position: absolute;
+      top: 82px;
+      left: 16px;
+      color: #66666a;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .headline-total {
+      position: absolute;
+      top: 77px;
+      right: 55px;
+      color: var(--accent);
+      font-family: "Times New Roman", "Apple SD Gothic Neo", serif;
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .vat-note {
+      position: absolute;
+      top: 108px;
+      right: 104px;
+      color: #b6835b;
+      font-size: 9px;
+      font-weight: 500;
+    }
+
+    .date-accent-rule {
+      position: absolute;
+      top: 105px;
+      left: 13px;
+      width: 390px;
+      height: 1px;
+      background: #bfa78f;
+    }
+
+    .recipient {
+      position: absolute;
+      top: 116px;
+      left: 16px;
+      color: #68676b;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .recipient-rule {
+      top: 136px;
+      height: 1px;
+      background: var(--rule-soft);
+    }
+
+    .sender {
+      position: absolute;
+      top: 155px;
+      left: 16px;
+      color: #68676b;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .item-header {
+      position: absolute;
+      top: 196px;
+      left: 15px;
+      display: grid;
+      grid-template-columns: 132px 257px 80px 75px;
+      width: 544px;
+      color: #727176;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .item-header span:nth-child(3),
+    .item-header span:nth-child(4) {
+      text-align: left;
+    }
+
+    .item-body {
+      position: absolute;
+      top: 214px;
+      left: 13px;
+      width: 548px;
+      height: 214px;
+      overflow: hidden;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--band) 0,
+        var(--band) 31px,
+        #fff 31px,
+        #fff 61px
+      );
+    }
+
+    .item-row {
+      display: grid;
+      grid-template-columns: 132px 257px 80px 79px;
+      align-items: center;
+      height: 31px;
+      padding: 0;
+      color: #68676b;
+      font-size: 10.5px;
+      white-space: nowrap;
+    }
+
+    .item-row:nth-child(even) { height: 30px; }
+
+    .item-quantity { padding-left: 0; }
+
+    .item-unit-price,
+    .item-total {
+      display: grid;
+      grid-template-columns: 16px 1fr;
+      align-items: center;
+      padding: 0 4px;
+      text-align: right;
+      font-size: 9.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .won {
+      text-align: left;
+      font-family: "Times New Roman", serif;
+    }
+
+    .total-band {
+      position: absolute;
+      top: 520px;
+      left: 13px;
+      width: 548px;
+      height: 31px;
+      background: var(--band);
+    }
+
+    .net-total {
+      position: absolute;
+      top: 563px;
+      left: 455px;
+      display: grid;
+      grid-template-columns: 48px 16px 42px;
+      gap: 0;
+      align-items: baseline;
+      color: #68676b;
+      font-size: 10.5px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .net-total .won { margin-left: 0; }
+    .net-total span:first-child { font-size: 11.5px; }
+    .net-total span:last-child { font-size: 10px; }
+    .net-total span:last-child { text-align: right; }
+
+    .total-rule {
+      top: 580px;
+      height: 2px;
+      background: var(--rule);
+    }
+
+    .details-title {
+      position: absolute;
+      top: 601px;
+      left: 16px;
+      margin: 0;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .details {
+      position: absolute;
+      top: 625px;
+      left: 16px;
+      display: grid;
+      grid-template-columns: 132px 1fr;
+      grid-auto-rows: 31px;
+      width: 520px;
+      margin: 0;
+      color: #6b6a6e;
+      font-size: 11.5px;
+    }
+
+    .details dt,
+    .details dd {
+      margin: 0;
+      align-self: start;
+    }
+
+    .details-rule {
+      top: 703px;
+      height: 1px;
+      background: var(--rule-soft);
+    }
+
+    .special-label {
+      position: absolute;
+      top: 723px;
+      left: 16px;
+      color: #5f5e61;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .special-value {
+      position: absolute;
+      top: 721px;
+      left: 148px;
+      width: 405px;
+      margin: 0;
+      color: #6b6a6e;
+      font-size: 9px;
+      line-height: 14px;
+    }
+
+    @media print {
+      html, body { background: #fff; }
+      .page { margin: 0; box-shadow: none; }
+      @page { size: A4; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page" aria-label="RMNTC 거래명세서">
+    <section class="artboard">
+      <img
+        class="logo"
+        src="{{ template_asset('assets/rmntc-earth-logo.png') }}"
+        alt="RMNTC EARTH"
+      >
+
+      <h1 class="title">거래명세서</h1>
+      <hr class="header-rule">
+
+      <div class="issue-date">{{ document.dates.issue_date | date_ko }}</div>
+      <div class="date-accent-rule"></div>
+      <div class="headline-total">₩{{ document.totals.total | amount }}</div>
+      <div class="vat-note">(부가세 포함)</div>
+
+      <div class="recipient">수신자: {{ document.buyer.name }}</div>
+      <hr class="recipient-rule">
+      <div class="sender">발신자: {{ document.seller.name }}</div>
+
+      <div class="item-header" aria-hidden="true">
+        <span>수량</span>
+        <span>세부 정보</span>
+        <span>단가</span>
+        <span>KRW</span>
+      </div>
+
+      <section class="item-body" aria-label="거래 품목">
+        {% for item in document["items"] %}
+        <div class="item-row">
+          <span class="item-quantity">{{ item.quantity | amount }}</span>
+          <span class="item-description">{{ item.description }}</span>
+          <span class="item-unit-price">
+            <span class="won">₩</span>
+            <span>{{ item.unit_price | amount }}</span>
+          </span>
+          <span class="item-total">
+            <span class="won">₩</span>
+            <span>{{ item.total | amount }}</span>
+          </span>
+        </div>
+        {% endfor %}
+      </section>
+
+      <div class="total-band"></div>
+      <div class="net-total">
+        <span>순 합계</span>
+        <span class="won">₩</span>
+        <span>{{ document.totals.total | amount }}</span>
+      </div>
+      <hr class="total-rule">
+
+      <h2 class="details-title">세부 정보</h2>
+      <dl class="details">
+        <dt>상호명:</dt>
+        <dd>{{ document.seller.name }}</dd>
+        <dt>은행:</dt>
+        <dd>-</dd>
+        <dt>계좌 번호:</dt>
+        <dd>-</dd>
+      </dl>
+      <hr class="details-rule">
+
+      <div class="special-label">특이사항:</div>
+      <p class="special-value">
+        {{ document.remarks | default("", true) | multiline | safe }}
+      </p>
+    </section>
+  </main>
+</body>
+</html>

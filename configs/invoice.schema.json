@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:korean-business-document-generator:schema:invoice:1.0",
+  "title": "Canonical Korean Business Document - Invoice",
+  "description": "Canonical, presentation-independent data contract for an invoice.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "document"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Version of the canonical document contract."
+    },
+    "document_type": {
+      "type": "string",
+      "const": "invoice",
+      "description": "Stable discriminator identifying the document payload."
+    },
+    "document": {
+      "$ref": "#/$defs/invoice"
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "invoice": {
+      "type": "object",
+      "required": [
+        "invoice_number",
+        "dates",
+        "seller",
+        "buyer",
+        "currency",
+        "items",
+        "totals"
+      ],
+      "properties": {
+        "invoice_number": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Issuer-assigned identifier for this invoice."
+        },
+        "dates": {
+          "$ref": "#/$defs/dates"
+        },
+        "seller": {
+          "$ref": "#/$defs/party"
+        },
+        "buyer": {
+          "$ref": "#/$defs/party"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO 4217 alphabetic currency code used by every monetary amount."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/lineItem"
+          },
+          "description": "Ordered invoice line items."
+        },
+        "totals": {
+          "$ref": "#/$defs/totals"
+        },
+        "remarks": {
+          "type": "string",
+          "description": "Optional human-readable notes or payment-related remarks."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dates": {
+      "type": "object",
+      "required": [
+        "issue_date"
+      ],
+      "properties": {
+        "issue_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Calendar date on which the invoice was issued."
+        },
+        "supply_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Calendar date on which goods or services were supplied."
+        },
+        "due_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Calendar date by which payment is due."
+        }
+      },
+      "additionalProperties": false
+    },
+    "party": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Legal or trading name of the party."
+        },
+        "business_registration_number": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Business registration identifier as printed, without company-specific validation."
+        },
+        "representative": {
+          "type": "string",
+          "description": "Name of the party's representative."
+        },
+        "address": {
+          "type": "string",
+          "description": "Postal or registered business address."
+        },
+        "business_type": {
+          "type": "string",
+          "description": "Registered category or type of business."
+        },
+        "business_item": {
+          "type": "string",
+          "description": "Registered business item, industry, or activity."
+        },
+        "contact": {
+          "$ref": "#/$defs/contact"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Contact person's name."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Contact email address."
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact telephone number in its source form."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lineItem": {
+      "type": "object",
+      "required": [
+        "description",
+        "quantity",
+        "unit",
+        "unit_price",
+        "supply_amount",
+        "vat",
+        "total"
+      ],
+      "properties": {
+        "line_number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional stable one-based line identifier."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name or description of the supplied good or service."
+        },
+        "quantity": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Positive quantity supplied."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unit of measure, preserved independently from quantity."
+        },
+        "unit_price": {
+          "type": "number",
+          "description": "Price per unit before VAT."
+        },
+        "supply_amount": {
+          "type": "number",
+          "description": "Line amount before VAT and after any line-level adjustments."
+        },
+        "vat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "VAT amount applied to this line."
+        },
+        "total": {
+          "type": "number",
+          "description": "Final line amount including VAT."
+        },
+        "remarks": {
+          "type": "string",
+          "description": "Optional note specific to this line."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "supply_amount",
+        "vat",
+        "total"
+      ],
+      "properties": {
+        "supply_amount": {
+          "type": "number",
+          "description": "Canonical invoice-wide amount before VAT."
+        },
+        "vat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Canonical invoice-wide VAT amount."
+        },
+        "total": {
+          "type": "number",
+          "description": "Canonical invoice amount payable including VAT."
+        }
+      },
+      "additionalProperties": false
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Namespaced optional data outside the stable core contract.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_-]*)+$"
+      },
+      "additionalProperties": true
+    }
+  }
+}

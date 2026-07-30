@@ -1,0 +1,42 @@
+{
+  "provider": "manual-json",
+  "issue_date": {"value": "2026년 07월 29일", "confidence": 0.99},
+  "approval_number": {"value": "20260729-12345678", "confidence": 0.99},
+  "supplier": {
+    "business_registration_number": {"value": "123 45 67890", "confidence": 0.99},
+    "company_name": {"value": "알엠엔티씨 주식회사", "confidence": 0.99},
+    "representative": {"value": "김대표", "confidence": 0.98},
+    "address": {"value": "서울특별시 강남구 테헤란로 123, 8층", "confidence": 0.97},
+    "business_type": {"value": "서비스업", "confidence": 0.98},
+    "business_category": {"value": "경영 컨설팅 및 소프트웨어 개발", "confidence": 0.97},
+    "email": {"value": "billing@rmntc.example", "confidence": 0.96}
+  },
+  "buyer": {
+    "business_registration_number": {"value": "987-65-43210", "confidence": 0.99},
+    "company_name": {"value": "주식회사 한빛상사", "confidence": 0.99},
+    "representative": {"value": "이구매", "confidence": 0.98},
+    "address": {"value": "서울특별시 중구 세종대로 45", "confidence": 0.97},
+    "business_type": {"value": "도소매업", "confidence": 0.98},
+    "business_category": {"value": "산업용품 유통", "confidence": 0.98},
+    "email": {"value": "accounting@hanbit.example", "confidence": 0.96}
+  },
+  "items": [
+    {
+      "date": {"value": "07월 29일", "confidence": 0.95},
+      "item_name": {"value": "업무 프로세스 분석", "confidence": 0.99},
+      "specification": {"value": "컨설팅", "confidence": 0.93},
+      "unit": {"value": "식", "confidence": 0.95},
+      "quantity": {"value": "1", "confidence": 0.99},
+      "unit_price": {"value": "₩1,500,000", "confidence": 0.99},
+      "supply_amount": {"value": "1,500,000원", "confidence": 0.99},
+      "tax_amount": {"value": "150,000", "confidence": 0.99},
+      "remark": {"value": " 7월 수행분 ", "confidence": 0.94}
+    }
+  ],
+  "totals": {
+    "supply_amount": {"value": " 1,500,000 ", "confidence": 0.99},
+    "vat": {"value": "₩150,000", "confidence": 0.99},
+    "grand_total": {"value": "1,650,000원", "confidence": 0.99}
+  },
+  "receipt_claim_classification": {"value": "", "confidence": 0.99}
+}

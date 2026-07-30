@@ -1,0 +1,100 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+*.app/
+*.dmg
+*.pkg
+*.xcarchive
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.cer
+*.crt
+*.mobileprovision
+*.provisionprofile
+*.entitlements.local
+credentials*.json
+secrets*.json
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+*.sublime-workspace
+
+# JavaScript dependencies and build caches
+node_modules/
+web/node_modules/
+.next/
+web/.next/
+*.tsbuildinfo
+
+# Runtime input, sessions, and generated output
+input/**
+!input/.gitkeep
+output/**
+!output/.gitkeep
+tmp/
+temp/
+.tmp/
+.web-data/
+web-data/
+web_data/
+uploads/
+sessions/
+previews/
+downloads/
+
+# OCR model downloads and inference caches
+.paddle/
+.paddleocr/
+.paddlex/
+paddle_models/
+ocr_models/
+model_cache/
+
+# Temporary files, local logs, and native crash reports
+*.log
+logs/
+*.tmp
+*.swp
+*.bak
+*.orig
+*.ips
+*.crash
+core
+core.*
+
+# Generated document and preview artifacts outside the standard output roots
+*.generated.xlsx
+*.generated.pdf
+*.generated.zip
+*.preview.png
+*.preview.jpg
