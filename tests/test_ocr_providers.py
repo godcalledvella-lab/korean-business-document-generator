@@ -186,7 +186,7 @@ def test_paddle_provider_accepts_supported_inputs_and_converts_result(
     assert result.provider_name == "paddle"
     assert result.page_count == 1
     assert result.language == "ko"
-    assert result.raw_text == "전자세금계산서\n공급가액\n1,000"
+    assert result.raw_text == "전자세금계산서\n공급가액 1,000"
     assert len(result.text_regions) == 3
     assert result.text_regions[0].bounding_box == BoundingBox(
         page=1, x=10, y=10, width=100, height=20
@@ -209,6 +209,44 @@ def test_paddle_provider_rejects_unsupported_input(tmp_path):
     path.write_bytes(b"image")
     with pytest.raises(ValueError, match="Unsupported PaddleOCR input type"):
         PaddleOCRProvider(pipeline=_FakePaddlePipeline([])).extract(path)
+
+
+def test_paddle_provider_reconstructs_lines_and_preserves_punctuation(tmp_path):
+    path = tmp_path / "invoice.png"
+    path.write_bytes(b"image")
+    page = {
+        "page_index": 0,
+        "page_count": 1,
+        "overall_ocr_res": {
+            "rec_texts": [
+                "이메일",
+                "sample@example.co.kr",
+                "품목",
+                "Eco(K-Style)",
+                "/ 세트；Blue",
+                "공급받는자",
+            ],
+            "rec_scores": [0.99, 0.97, 0.99, 0.95, 0.72, 0.98],
+            "rec_polys": [
+                [[10, 10], [55, 10], [55, 25], [10, 25]],
+                [[65, 10], [205, 10], [205, 25], [65, 25]],
+                [[10, 40], [45, 40], [45, 55], [10, 55]],
+                [[55, 40], [145, 40], [145, 55], [55, 55]],
+                [[150, 40], [235, 40], [235, 55], [150, 55]],
+                [[400, 40], [475, 40], [475, 55], [400, 55]],
+            ],
+        },
+    }
+
+    result = PaddleOCRProvider(pipeline=_FakePaddlePipeline([page])).extract(path)
+
+    assert result.raw_text.splitlines() == [
+        "이메일 sample@example.co.kr",
+        "품목 Eco(K-Style) / 세트；Blue",
+        "공급받는자",
+    ]
+    assert result.text_regions[4].text == "/ 세트；Blue"
+    assert result.text_regions[4].confidence == 0.72
 
 
 def test_paddle_provider_reports_missing_optional_dependency(tmp_path, monkeypatch):

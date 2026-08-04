@@ -113,7 +113,7 @@ class PaddleOCRProvider(OCRProvider):
         page_maps = [_result_mapping(result) for result in results]
         regions: list[OCRTextRegion] = []
         tables: list[DetectedTable] = []
-        page_text: list[str] = []
+        page_regions: dict[int, list[OCRTextRegion]] = {}
         confidences: list[float] = []
 
         for ordinal, result in enumerate(page_maps, start=1):
@@ -125,21 +125,14 @@ class PaddleOCRProvider(OCRProvider):
                 _first_present(ocr, "rec_polys", "rec_boxes")
             )
             clean_texts = [str(text).strip() for text in texts]
-            ordered_blocks = [
-                str(_mapping(block).get("block_content") or "").strip()
-                for block in _sequence(result.get("parsing_res_list"))
-            ]
-            ordered_text = [text for text in ordered_blocks if text]
-            page_text.extend(
-                ordered_text or [text for text in clean_texts if text]
-            )
-
             for index, text in enumerate(clean_texts):
                 box = _box(polygons[index], page) if index < len(polygons) else None
                 if not text or box is None:
                     continue
                 score = _confidence(scores[index]) if index < len(scores) else None
-                regions.append(OCRTextRegion(text, box, score))
+                region = OCRTextRegion(text, box, score)
+                regions.append(region)
+                page_regions.setdefault(page, []).append(region)
                 if score is not None:
                     confidences.append(score)
 
@@ -153,10 +146,14 @@ class PaddleOCRProvider(OCRProvider):
             _positive_int(result.get("page_count"), 0) for result in page_maps
         ]
         page_count = max([len(page_maps), *declared_counts])
+        page_text = [
+            _reconstruct_page_text(page_regions[page])
+            for page in sorted(page_regions)
+        ]
         return OCRResult(
             page_count=page_count,
             language="ko",
-            raw_text="\n".join(page_text),
+            raw_text="\n".join(text for text in page_text if text),
             detected_tables=tuple(tables),
             text_regions=tuple(regions),
             confidence=fmean(confidences) if confidences else None,
@@ -235,6 +232,91 @@ def _convert_table(data: Mapping[str, Any], page: int) -> DetectedTable:
         bounding_box=table_box,
         confidence=fmean(cell_scores) if cell_scores else None,
     )
+
+
+_CLOSING_PUNCTUATION = frozenset(".,:;!?)]}，。：；！？）］｝")
+_OPENING_PUNCTUATION = frozenset("([{（［｛")
+
+
+def _reconstruct_page_text(regions: Sequence[OCRTextRegion]) -> str:
+    """Reconstruct visual lines without merging neighboring table columns."""
+    if not regions:
+        return ""
+    ordered = sorted(
+        regions,
+        key=lambda region: (
+            region.bounding_box.y + region.bounding_box.height / 2,
+            region.bounding_box.x,
+        ),
+    )
+    rows: list[list[OCRTextRegion]] = []
+    row_centers: list[float] = []
+    for region in ordered:
+        center = region.bounding_box.y + region.bounding_box.height / 2
+        if not rows:
+            rows.append([region])
+            row_centers.append(center)
+            continue
+        typical_height = fmean(item.bounding_box.height for item in rows[-1])
+        tolerance = max(3.0, min(8.0, typical_height * 0.45))
+        if abs(center - row_centers[-1]) > tolerance:
+            rows.append([region])
+            row_centers.append(center)
+        else:
+            rows[-1].append(region)
+            row_centers[-1] = fmean(
+                item.bounding_box.y + item.bounding_box.height / 2
+                for item in rows[-1]
+            )
+
+    lines: list[str] = []
+    for row in rows:
+        current: list[OCRTextRegion] = []
+        for region in sorted(row, key=lambda item: item.bounding_box.x):
+            if current and _column_break(current[-1], region):
+                lines.append(_join_regions(current))
+                current = []
+            current.append(region)
+        if current:
+            lines.append(_join_regions(current))
+    return "\n".join(line for line in lines if line)
+
+
+def _column_break(left: OCRTextRegion, right: OCRTextRegion) -> bool:
+    gap = right.bounding_box.x - (
+        left.bounding_box.x + left.bounding_box.width
+    )
+    left_chars = max(len(left.text.replace(" ", "")), 1)
+    char_width = left.bounding_box.width / left_chars
+    threshold = max(
+        left.bounding_box.height * 1.8,
+        right.bounding_box.height * 1.8,
+        char_width * 3.5,
+    )
+    return gap > threshold
+
+
+def _join_regions(regions: Sequence[OCRTextRegion]) -> str:
+    text = ""
+    previous: OCRTextRegion | None = None
+    for region in regions:
+        value = region.text.strip()
+        if not value:
+            continue
+        if previous is None:
+            text = value
+        else:
+            gap = region.bounding_box.x - (
+                previous.bounding_box.x + previous.bounding_box.width
+            )
+            attach = (
+                value[0] in _CLOSING_PUNCTUATION
+                or text[-1] in _OPENING_PUNCTUATION
+                or gap <= 1.0
+            )
+            text += ("" if attach else " ") + value
+        previous = region
+    return text
 
 
 def _html_cells(html: str) -> list[dict[str, Any]]:

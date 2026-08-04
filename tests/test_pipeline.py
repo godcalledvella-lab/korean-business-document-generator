@@ -13,7 +13,7 @@ from pypdf import PdfReader
 
 from extraction.providers import BoundingBox, OCRResult, OCRTextRegion
 from extraction.providers.mock_provider import MockProvider
-from pipeline.mapper import OCRInvoiceMapper
+from pipeline.mapper import OCRInvoiceMapper, PAYMENT_METHOD_LABELS
 from pipeline.service import PipelineError, RmntcGenerationPipeline
 
 
@@ -22,6 +22,9 @@ FIXTURE = ROOT / "tests/fixtures/tax_invoice/clean_single_item.json"
 REFERENCE = ROOT / "reference/rmntc/rmntc_reference.pdf"
 CORRECTED_LAYOUT = (
     ROOT / "tests/fixtures/ocr/korean_corrected_tax_invoice_layout.json"
+)
+PUNCTUATION_LAYOUT = (
+    ROOT / "tests/fixtures/ocr/korean_punctuation_multiline_layout.json"
 )
 
 
@@ -147,8 +150,8 @@ def test_pipeline_mapper_uses_only_explicit_labels():
     assert raw.items == ()
 
 
-def _corrected_layout_result() -> OCRResult:
-    payload = json.loads(CORRECTED_LAYOUT.read_text(encoding="utf-8"))
+def _layout_result(path: Path) -> OCRResult:
+    payload = json.loads(path.read_text(encoding="utf-8"))
     regions = tuple(
         OCRTextRegion(
             text,
@@ -165,6 +168,10 @@ def _corrected_layout_result() -> OCRResult:
         confidence=0.95,
         provider_name=payload["provider_name"],
     )
+
+
+def _corrected_layout_result() -> OCRResult:
+    return _layout_result(CORRECTED_LAYOUT)
 
 
 def test_corrected_invoice_uses_spatial_amounts_not_payment_labels():
@@ -184,6 +191,32 @@ def test_corrected_invoice_uses_spatial_amounts_not_payment_labels():
         "150,000",
         "70,000",
     ]
+
+
+def test_korean_punctuation_and_multiline_fields_survive_spatial_mapping():
+    result = _layout_result(PUNCTUATION_LAYOUT)
+    raw = OCRInvoiceMapper().map(result)
+
+    assert "Eco(K-Style)" in [region.text for region in result.text_regions]
+    assert "/ 세트；Blue" in [region.text for region in result.text_regions]
+    assert raw.supplier.business_registration_number.value == "102-21-34572"
+    assert raw.buyer.business_registration_number.value == "809-82-00077"
+    assert raw.supplier.address.value == (
+        "경상남도 창원시 성산구 외동반림로126번길 57, 1층(중앙동)"
+    )
+    assert raw.buyer.address.value == (
+        "서울특별시 송파구 올림픽로 424, 올림픽회관 신관 213호 (방이동)"
+    )
+    assert raw.buyer.email.value == "koreasquash@sports.or.kr"
+    assert raw.supplier.email.value == "bigthumbdesigner@gmail com"
+    assert raw.supplier.email.source_text == "이메일 bigthumbdesigner@gmail com"
+    assert raw.supplier.email.confidence == 0.79
+    assert [item.item_name.value for item in raw.items] == [
+        "Eco(K-Style) / 세트；Blue",
+        "리본-Blue",
+    ]
+    assert raw.items[0].item_name.confidence == 0.72
+    assert all(item.item_name.value not in PAYMENT_METHOD_LABELS for item in raw.items)
 
 
 def test_pipeline_cli_generates_expected_outputs(tmp_path):

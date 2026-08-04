@@ -16,6 +16,7 @@ PARTY_LABELS = (
     "등록번호",
     "사업자등록번호",
     "상호",
+    "상혼",
     "법인명",
     "성명",
     "대표자",
@@ -182,9 +183,10 @@ def _party(
                         )
                     ),
                 )
+        spatial["email"] = _review_invalid_email(spatial["email"])
         return spatial
 
-    return {
+    mapped = {
         field: _field(
             result,
             lines,
@@ -200,6 +202,8 @@ def _party(
         )
         for field, labels in aliases.items()
     }
+    mapped["email"] = _review_invalid_email(mapped["email"])
+    return mapped
 
 
 def _items(result: OCRResult) -> list[dict[str, str | None]]:
@@ -453,14 +457,19 @@ def _registration_number(
         region
         for region in _regions(result)
         if _in_bounds(region, bounds)
-        and region.bounding_box.y < 60
-        and re.fullmatch(r"\d{3}\s*-\s*\d{2}\s*-\s*\d{5}", region.text.strip())
+        and region.bounding_box.y < 100
+        and re.fullmatch(
+            r"\s*\d\s*\d\s*\d\s*-\s*\d\s*\d\s*-\s*"
+            r"\d\s*\d\s*\d\s*\d\s*\d\s*",
+            region.text,
+        )
     ]
     if not candidates:
         return None
     candidate = min(candidates, key=lambda region: region.bounding_box.y)
+    digits = re.sub(r"\D", "", candidate.text)
     return {
-        "value": candidate.text.strip(),
+        "value": f"{digits[:3]}-{digits[3:5]}-{digits[5:]}",
         "confidence": candidate.confidence,
         "source_text": candidate.text,
     }
@@ -498,27 +507,38 @@ def _party_address(
     anchors = [
         region
         for region in regions
-        if _matches_label(region.text, ("사업장", "사업장주소"))
+        if _compact(region.text) in {"사업장", "사업장주소"}
     ]
     if not anchors:
         return None
     anchor = min(anchors, key=lambda region: region.bounding_box.y)
     box = anchor.bounding_box
+    next_section_y = min(
+        (
+            region.bounding_box.y
+            for region in regions
+            if region.bounding_box.y > box.y
+            and _matches_label(
+                region.text,
+                ("업태", "업대", "종목", "이메일", "전자우편", "전화"),
+            )
+        ),
+        default=float("inf"),
+    )
     values = [
         region
         for region in regions
         if region is not anchor
         and region.bounding_box.x >= box.x + box.width - 3
-        and box.y - 3
-        <= region.bounding_box.y
-        <= box.y + max(20.0, box.height * 1.5)
+        and box.y - 3 <= region.bounding_box.y <= box.y + max(28.0, box.height * 2.2)
+        and region.bounding_box.y < next_section_y - max(5.0, box.height * 0.5)
         and not _matches_label(region.text, PARTY_LABELS)
     ]
     if not values:
         return None
     values.sort(key=lambda region: (region.bounding_box.y, region.bounding_box.x))
     return {
-        "value": " ".join(region.text.strip() for region in values),
+        "value": _join_spatial_text(values),
         "confidence": min(
             (
                 region.confidence
@@ -527,8 +547,25 @@ def _party_address(
             ),
             default=None,
         ),
-        "source_text": " ".join(region.text for region in values),
+        "source_text": _join_spatial_text(values),
     }
+
+
+def _review_invalid_email(
+    field: dict[str, object] | None,
+) -> dict[str, object] | None:
+    """Keep imperfect OCR email text, but force visible human review."""
+    if field is None:
+        return None
+    value = field.get("value")
+    if not isinstance(value, str) or "@" not in value:
+        return field
+    if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        return field
+    confidence = field.get("confidence")
+    field = dict(field)
+    field["confidence"] = min(float(confidence), 0.79) if confidence is not None else 0.79
+    return field
 
 
 def _spatial_items(result: OCRResult) -> list[dict[str, object | None]]:
@@ -561,6 +598,31 @@ def _spatial_items(result: OCRResult) -> list[dict[str, object | None]]:
             if _header(region.text) is not None
         ),
         key=lambda value: value[0],
+    )
+    item_header = min(
+        (
+            region
+            for region in header_regions
+            if _header(region.text) == "item_name"
+        ),
+        key=lambda region: region.bounding_box.x,
+    )
+    item_center = item_header.bounding_box.x + item_header.bounding_box.width / 2
+    item_left = max(
+        (
+            region.bounding_box.x + region.bounding_box.width
+            for region in header_regions
+            if _header(region.text) == "date"
+        ),
+        default=0.0,
+    )
+    item_right = min(
+        (
+            (item_center + center) / 2
+            for center, field in columns
+            if center > item_center and field != "item_name"
+        ),
+        default=float("inf"),
     )
     required = {"item_name", "quantity", "unit_price", "supply_amount", "tax_amount"}
     if not required.issubset({field for _, field in columns}):
@@ -617,48 +679,49 @@ def _spatial_items(result: OCRResult) -> list[dict[str, object | None]]:
 
     items: list[dict[str, object | None]] = []
     for row in rows:
-        values: dict[str, OCRTextRegion] = {}
+        values: dict[str, list[OCRTextRegion]] = {}
         date_parts: list[OCRTextRegion] = []
-        item_name_candidates = [
-            region
-            for region in row
-            if not _is_krw_token(region.text)
-            and region.bounding_box.x
-            < next(
-                center
-                for center, field in columns
-                if field == "quantity"
-            )
-        ]
         for region in row:
             field = column_for(region)
             if field == "date":
                 date_parts.append(region)
             elif field is not None:
-                values[field] = region
-        if item_name_candidates:
-            values["item_name"] = min(
-                item_name_candidates,
-                key=lambda value: value.bounding_box.x,
+                values.setdefault(field, []).append(region)
+        item_regions = [
+            region
+            for region in row
+            if item_left
+            < region.bounding_box.x + region.bounding_box.width / 2
+            < item_right
+            and not re.fullmatch(r"\d{1,2}", region.text.strip())
+        ]
+        if item_regions:
+            values["item_name"] = item_regions
+        item_text = _join_spatial_text(values.get("item_name", ()))
+        numeric_fields = ("quantity", "unit_price", "supply_amount", "tax_amount")
+        if (
+            not item_text
+            or _compact(item_text) in PAYMENT_METHOD_LABELS
+            or not any(
+                any(_is_krw_token(region.text) for region in values.get(field, ()))
+                for field in numeric_fields
             )
-            name_x = values["item_name"].bounding_box.x
-            date_parts = [
-                region
-                for region in row
-                if region.bounding_box.x < name_x
-                and re.fullmatch(r"\d{1,2}", region.text.strip())
-            ]
-        if "item_name" not in values or not any(
-            field in values
-            for field in ("quantity", "unit_price", "supply_amount", "tax_amount")
         ):
             continue
         mapped: dict[str, object | None] = {}
-        for field, region in values.items():
+        for field, field_regions in values.items():
+            text = _join_spatial_text(field_regions)
             mapped[field] = {
-                "value": region.text.strip() or None,
-                "confidence": region.confidence,
-                "source_text": region.text,
+                "value": text or None,
+                "confidence": min(
+                    (
+                        region.confidence
+                        for region in field_regions
+                        if region.confidence is not None
+                    ),
+                    default=None,
+                ),
+                "source_text": text,
             }
         if date_parts:
             ordered = sorted(date_parts, key=lambda value: value.bounding_box.x)
@@ -677,3 +740,37 @@ def _spatial_items(result: OCRResult) -> list[dict[str, object | None]]:
         mapped.setdefault("unit", None)
         items.append(mapped)
     return items
+
+
+def _join_spatial_text(regions: Iterable[OCRTextRegion]) -> str:
+    ordered = sorted(
+        regions,
+        key=lambda region: (region.bounding_box.y, region.bounding_box.x),
+    )
+    text = ""
+    previous: OCRTextRegion | None = None
+    closing = ".,:;!?)]}，。：；！？）］｝"
+    opening = "([{（［｛"
+    for region in ordered:
+        value = region.text.strip()
+        if not value:
+            continue
+        if previous is None:
+            text = value
+        else:
+            same_line = abs(
+                (region.bounding_box.y + region.bounding_box.height / 2)
+                - (previous.bounding_box.y + previous.bounding_box.height / 2)
+            ) <= max(region.bounding_box.height, previous.bounding_box.height) * 0.6
+            unmatched_parenthesis = (
+                text.count("(") + text.count("（")
+                > text.count(")") + text.count("）")
+            )
+            attach = (
+                value[0] in closing
+                or text[-1] in opening
+                or (not same_line and unmatched_parenthesis)
+            )
+            text += ("" if attach else " ") + value
+        previous = region
+    return text
