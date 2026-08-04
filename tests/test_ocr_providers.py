@@ -30,6 +30,7 @@ from extraction.service import TaxInvoiceExtractionService
 ROOT = Path(__file__).resolve().parents[1]
 MOCK_FIXTURE = ROOT / "tests/fixtures/tax_invoice/clean_single_item.json"
 EXPECTED_NAMES = (
+    "apple-vision",
     "azure",
     "claude",
     "easyocr",

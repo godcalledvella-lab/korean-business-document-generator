@@ -9,6 +9,11 @@ from .base import (
     OCRTaxInvoiceExtractor,
     OCRTextRegion,
 )
+from .apple_vision_provider import (
+    AppleVisionAvailability,
+    AppleVisionProvider,
+    AppleVisionUnavailableError,
+)
 from .paddleocr_provider import PaddleOCRDependencyError, PaddleOCRProvider
 from .registry import (
     DEFAULT_PROVIDER_REGISTRY,
@@ -18,6 +23,9 @@ from .registry import (
 
 __all__ = [
     "BoundingBox",
+    "AppleVisionAvailability",
+    "AppleVisionProvider",
+    "AppleVisionUnavailableError",
     "DEFAULT_PROVIDER_REGISTRY",
     "DetectedTable",
     "OCRProvider",

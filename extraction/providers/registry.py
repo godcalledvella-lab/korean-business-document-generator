@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Type
 
 from .azure_document_intelligence_provider import (
     AzureDocumentIntelligenceProvider,
 )
+from .apple_vision_provider import AppleVisionProvider
 from .base import OCRProvider
 from .claude_vision_provider import ClaudeVisionProvider
 from .easyocr_provider import EasyOCRProvider
@@ -61,9 +63,9 @@ class ProviderRegistry:
 def _default_registry() -> ProviderRegistry:
     registry = ProviderRegistry()
     for name, provider in (
+        ("apple-vision", AppleVisionProvider),
         ("mock", MockProvider),
         ("tesseract", TesseractProvider),
-        ("paddle", PaddleOCRProvider),
         ("easyocr", EasyOCRProvider),
         ("google", GoogleDocumentAIProvider),
         ("azure", AzureDocumentIntelligenceProvider),
@@ -71,7 +73,18 @@ def _default_registry() -> ProviderRegistry:
         ("claude", ClaudeVisionProvider),
     ):
         registry.register(name, provider)
+    if _legacy_paddle_enabled():
+        registry.register("paddle", PaddleOCRProvider)
     return registry
+
+
+def _legacy_paddle_enabled() -> bool:
+    return os.environ.get("RMNTC_ENABLE_LEGACY_PADDLE", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 DEFAULT_PROVIDER_REGISTRY = _default_registry()

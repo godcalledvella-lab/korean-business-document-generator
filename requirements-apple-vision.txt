@@ -1,0 +1,4 @@
+# Optional production OCR bridge for macOS. Apple frameworks are provided by macOS.
+pyobjc-framework-Vision>=10.3,<12
+pyobjc-framework-Quartz>=10.3,<12
+pyobjc-framework-PDFKit>=10.3,<12
