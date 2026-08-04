@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { ensureSessionRoot, runPython, sessionRoot } from "@/lib/server";
+import { ensureSessionRoot, runExtraction, sessionRoot } from "@/lib/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -33,12 +33,11 @@ export async function POST(request: Request) {
     await mkdir(directory);
     const source = path.join(directory, `tax-invoice${extension}`);
     await writeFile(source, Buffer.from(await upload.arrayBuffer()), { flag: "wx" });
-    const payload = await runPython("extract_invoice.py", [
+    const payload = await runExtraction({
       source,
-      process.env.OCR_PROVIDER || "paddle",
       directory,
-      upload.name,
-    ]);
+      original_name: upload.name,
+    });
     return NextResponse.json(payload);
   } catch (reason) {
     const message =

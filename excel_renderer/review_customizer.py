@@ -59,23 +59,27 @@ def _customize_blue_quotation(
     settings: Mapping[str, Any],
 ) -> None:
     information = _mapping(settings, "informationBar")
-    labels = (
-        ("companyName", "상호"),
-        ("businessNumber", "사업자번호"),
-        ("address", "주소"),
-        ("representative", "대표자"),
+    existing_information = _cell_text(
+        workbook_path,
+        QUOTATION_SHEET_PART,
+        "A6",
     )
-    information_text = "    ".join(
-        f"■ {label} : {_visible_value(information, key)}"
-        for key, label in labels
+    information_text = (
+        f"■ 상호 : {_visible_value(information, 'companyName')}"
+        f"    ■ 사업자번호 : {_visible_value(information, 'businessNumber')}"
+        f"    ■ 업종 : {_labeled_value(existing_information, '업종')}"
+        f"    ■ 업태 : {_labeled_value(existing_information, '업태')}"
+        f"\n■ 주소 : {_visible_value(information, 'address')}"
+        f"    ■ 대표자 : {_visible_value(information, 'representative')}    "
     )
     footer = _mapping(settings, "footer")
     footer_text = (
         f"TEL : {_text(footer, 'telephone')} / E-mail : {_text(footer, 'email')}"
         f" / 계좌번호 : {_text(footer, 'bank')} {_text(footer, 'accountNumber')}"
     )
+    client_text = _text(settings, "client").replace(" 귀하", "\u00a0귀하")
     changes = (
-        ("H3", "text", _wrap_template_text(_text(settings, "client"))),
+        ("H3", "text", client_text),
         ("H4", "text", _wrap_template_text(_text(settings, "product"))),
         ("A6", "text", information_text),
         (
@@ -146,6 +150,28 @@ def _update_sheet(
 def _visible_value(parent: Mapping[str, Any], key: str) -> str:
     field = _mapping(parent, key)
     return _text(field, "value") if _boolean(field, "visible") else ""
+
+
+def _cell_text(workbook_path: Path, sheet_part: str, reference: str) -> str:
+    with zipfile.ZipFile(workbook_path, "r") as workbook:
+        xml = workbook.read(sheet_part).decode("utf-8")
+    cell = _cell_pattern(reference).search(xml)
+    if not cell or cell.group("self"):
+        raise ValueError(f"Mapped text cell {reference} is missing.")
+    text = re.search(r"<t(?:\s[^>]*)?>(.*?)</t>", cell.group("body") or "", re.DOTALL)
+    if text is None:
+        raise ValueError(f"Mapped text cell {reference} has no text value.")
+    return text.group(1)
+
+
+def _labeled_value(value: str, label: str) -> str:
+    match = re.search(
+        rf"■\s*{re.escape(label)}\s*:\s*(.*?)(?=\s+■|\n|$)",
+        value,
+    )
+    if match is None:
+        raise ValueError(f"Quotation information bar is missing {label}.")
+    return match.group(1).strip()
 
 
 def _mapping(parent: Mapping[str, Any], key: str) -> Mapping[str, Any]:

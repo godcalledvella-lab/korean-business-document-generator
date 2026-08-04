@@ -193,6 +193,80 @@ def test_corrected_invoice_uses_spatial_amounts_not_payment_labels():
     ]
 
 
+def test_spatial_mapping_recovers_spaced_approval_and_misread_quantity_header():
+    source = _corrected_layout_result()
+    regions = tuple(
+        OCRTextRegion(
+            (
+                "20260429- 1 0260429- 20004420"
+                if region.text == "20260429-10260429-20004420"
+                else "수랑"
+                if region.text == "수량"
+                else region.text
+            ),
+            region.bounding_box,
+            region.confidence,
+        )
+        for region in source.text_regions
+    )
+    result = OCRResult(
+        page_count=source.page_count,
+        language=source.language,
+        raw_text="\n".join(region.text for region in regions),
+        text_regions=regions,
+        confidence=source.confidence,
+        provider_name=source.provider_name,
+    )
+
+    raw = OCRInvoiceMapper().map(result)
+
+    assert raw.approval_number.value == "20260429-10260429-20004420"
+    assert [item.item_name.value for item in raw.items] == [
+        "품목A",
+        "품목B",
+        "품목C",
+    ]
+    assert [item.quantity.value for item in raw.items] == ["6", "1", "1"]
+
+
+def test_normalized_text_fallback_maps_buyer_company_and_road_address():
+    regions = (
+        OCRTextRegion(
+            "사단법인대한궁도협회",
+            BoundingBox(1, 0.634, 0.173, 0.142, 0.027),
+            0.5,
+        ),
+        OCRTextRegion(
+            "성명", BoundingBox(1, 0.803, 0.173, 0.034, 0.027), 0.5
+        ),
+        OCRTextRegion(
+            "김창순", BoundingBox(1, 0.864, 0.173, 0.047, 0.022), 0.5
+        ),
+        OCRTextRegion(
+            "서울특별시 송파구 올림픽로 424, 506호",
+            BoundingBox(1, 0.634, 0.222, 0.241, 0.027),
+            1.0,
+        ),
+        OCRTextRegion(
+            "사업성", BoundingBox(1, 0.088, 0.218, 0.037, 0.022), 0.5
+        ),
+    )
+    result = OCRResult(
+        page_count=1,
+        language="ko",
+        raw_text="\n".join(region.text for region in regions),
+        text_regions=regions,
+        confidence=0.7,
+        provider_name="apple-vision",
+    )
+
+    raw = OCRInvoiceMapper().map(result)
+
+    assert raw.buyer.company_name.value == "사단법인 대한궁도협회"
+    assert raw.buyer.company_name.source_text == "사단법인대한궁도협회"
+    assert raw.buyer.address.value == "서울특별시 송파구 올림픽로 424, 506호"
+
+
 def test_korean_punctuation_and_multiline_fields_survive_spatial_mapping():
     result = _layout_result(PUNCTUATION_LAYOUT)
     raw = OCRInvoiceMapper().map(result)

@@ -167,7 +167,7 @@ def test_generation_adapter_creates_six_fallback_previews(tmp_path):
         session / "generated/comparison.xlsx",
         data_only=False,
     )
-    assert comparison["Sheet1"]["E14"].value == 1_612_500
+    assert comparison["Sheet1"]["E14"].value == 1_773_750
     assert comparison["Sheet1"]["B7"].value == "검토 구매자"
     assert comparison["Sheet1"]["F6"].value == "우현코퍼레이션"
     comparison.close()
@@ -184,7 +184,9 @@ def test_generation_adapter_creates_six_fallback_previews(tmp_path):
         session / "generated/quotation.xlsx",
         data_only=False,
     )
-    assert quotation["견적서"]["H3"].value.replace("\n", " ") == (
+    assert quotation["견적서"]["H3"].value.replace("\n", " ").replace(
+        "\u00a0", " "
+    ) == (
         "사단법인 대한공도협회 귀하"
     )
     assert quotation["견적서"]["B8"].value is None

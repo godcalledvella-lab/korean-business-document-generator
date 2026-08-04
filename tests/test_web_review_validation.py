@@ -150,15 +150,23 @@ def test_entered_unit_passes_review_and_reaches_downstream_workbook(tmp_path):
     workbook.close()
 
 
-def test_missing_or_numeric_phone_is_blocked_and_manual_text_is_preserved(tmp_path):
+def test_seller_phone_is_optional_and_manual_text_is_preserved(tmp_path):
     draft = json.loads((ROOT / "input/invoice.json").read_text(encoding="utf-8"))
     draft["document"]["seller"]["contact"].pop("phone")
-    assert _validate(draft) == [
-        {
-            "path": "document.seller.contact.phone",
-            "message": "공급자 전화번호를 입력해 주세요.",
-        }
-    ]
+    assert _validate(draft) == []
+
+    approved = tmp_path / "approved_without_phone.json"
+    approved.write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
+    generated = tmp_path / "generated_without_phone"
+    RmntcDocumentGenerator(ROOT).generate(approved, generated)
+    quotation = load_workbook(generated / "quotation.xlsx", data_only=False)
+    assert quotation["견적서"]["A35"].value == "E-mail : billing@rmntc.example"
+    assert "미기재" not in quotation["견적서"]["A35"].value
+    quotation.close()
+    comparison = load_workbook(generated / "comparison.xlsx", data_only=False)
+    assert comparison["Sheet1"]["F9"].value in (None, "")
+    assert comparison["Sheet1"]["I9"].value in (None, "")
+    comparison.close()
 
     draft["document"]["seller"]["contact"]["phone"] = 212345678
     assert _validate(draft) == [

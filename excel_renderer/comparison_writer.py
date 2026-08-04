@@ -186,12 +186,12 @@ def _populate_sheet(
         (
             "F9",
             "text",
-            _required_text(contact, "phone", "document.seller.contact.phone"),
+            _optional_text(contact, "phone", "document.seller.contact.phone"),
         ),
         (
             "I9",
             "text",
-            _required_text(contact, "phone", "document.seller.contact.phone"),
+            _optional_text(contact, "phone", "document.seller.contact.phone"),
         ),
         (
             "A21",
@@ -276,9 +276,9 @@ def _populate_sheet(
         Decimal(str(_mapping(item, "comparison", "item comparison")["supply_amount"]))
         for item in items
     )
-    if line_total != Decimal(str(expected_total)):
+    if Decimal(str(expected_total)) != line_total:
         raise InvalidComparisonViewModel(
-            "Comparison line amounts do not equal the configured comparison total."
+            "Comparison total must equal its marked-up line amounts."
         )
 
     updated = xml

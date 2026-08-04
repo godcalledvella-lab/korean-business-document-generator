@@ -15,6 +15,7 @@ from typing import Callable, Sequence
 from xml.etree import ElementTree
 
 from pypdf import PdfReader, PdfWriter, Transformation
+from pypdf.generic import ContentStream, FloatObject
 
 from package.models import BackendAvailability, RenderResult
 
@@ -34,6 +35,14 @@ WORKSHEETS = {
     "statement": "청구서",
     "quotation": "견적서",
     "comparison": "Sheet1",
+}
+MISSING_KOREAN_FONTS = {
+    "Dotum",
+    "Gulim",
+    "Gulimche",
+    "Malgun Gothic",
+    "HY그래픽M",
+    "새굴림",
 }
 
 
@@ -135,8 +144,11 @@ class LibreOfficeBackend(PDFBackend):
             target_worksheet = _target_worksheet(source.stem)
             if target_worksheet is not None:
                 _isolate_worksheet(copied, target_worksheet)
+                _prepare_bold_korean_font_fallback(copied, target_worksheet)
                 if target_worksheet == "청구서":
                     _prepare_statement_render_copy(copied)
+                elif target_worksheet == "견적서":
+                    _prepare_quotation_render_copy(copied)
             command = build_libreoffice_command(
                 self.executable or Path("soffice"), copied, work, profile
             )
@@ -172,6 +184,13 @@ class LibreOfficeBackend(PDFBackend):
                     sources_unchanged=after == before,
                 )
             _fit_single_page_to_a4_portrait(converted)
+            if target_worksheet == "청구서":
+                _scale_statement_pdf(converted)
+            elif target_worksheet == "견적서":
+                _align_quotation_pdf_to_reference(converted)
+            elif target_worksheet == "Sheet1":
+                _shift_comparison_pdf_right(converted)
+                _center_comparison_title(converted)
             shutil.copy2(converted, output)
             return RenderResult(
                 self.name,
@@ -188,6 +207,56 @@ class LibreOfficeBackend(PDFBackend):
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _prepare_bold_korean_font_fallback(
+    workbook_path: Path,
+    target_worksheet: str,
+) -> None:
+    """Resolve missing font families while preserving each source style's weight."""
+    temporary = workbook_path.with_suffix(".korean-font.xlsx")
+    styles_part = "xl/styles.xml"
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    ElementTree.register_namespace("", namespace)
+
+    with zipfile.ZipFile(workbook_path, "r") as source:
+        members = [
+            (deepcopy(entry), source.read(entry.filename))
+            for entry in source.infolist()
+        ]
+
+    with zipfile.ZipFile(temporary, "w") as destination:
+        for entry, payload in members:
+            if entry.filename == styles_part:
+                root = ElementTree.fromstring(payload)
+                fonts = root.find(f"{{{namespace}}}fonts")
+                if fonts is None:
+                    raise ValueError("Workbook is missing its font style table.")
+                for font_id, font in enumerate(fonts):
+                    name = font.find(f"{{{namespace}}}name")
+                    bold = font.find(f"{{{namespace}}}b")
+                    is_bold = bold is not None and bold.get("val", "1") != "0"
+                    if name is None:
+                        continue
+                    source_family = name.get("val")
+                    if source_family == "Calibri":
+                        name.set("val", "Liberation Sans")
+                    elif source_family in MISSING_KOREAN_FONTS:
+                        if target_worksheet == "견적서" and font_id == 8:
+                            name.set("val", "Apple SD Gothic Neo")
+                        elif target_worksheet == "Sheet1" and font_id == 1:
+                            name.set("val", "NanumGothic")
+                        elif is_bold:
+                            name.set("val", "Noto Sans KR")
+                        else:
+                            name.set("val", "Apple SD Gothic Neo")
+                payload = ElementTree.tostring(
+                    root,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                )
+            destination.writestr(entry, payload)
+    temporary.replace(workbook_path)
 
 
 def _target_worksheet(stem: str) -> str | None:
@@ -291,6 +360,191 @@ def _fit_single_page_to_a4_portrait(pdf_path: Path) -> None:
         Transformation().scale(scale).translate(offset_x, offset_y),
     )
     temporary = pdf_path.with_suffix(".a4.pdf")
+    with temporary.open("wb") as stream:
+        canvas.write(stream)
+    temporary.replace(pdf_path)
+
+
+def _scale_statement_pdf(pdf_path: Path) -> None:
+    """Reduce the complete statement page by 2.5% around the page center."""
+    reader = PdfReader(pdf_path)
+    if len(reader.pages) != 1:
+        return
+    page = reader.pages[0]
+    width = float(page.mediabox.width)
+    height = float(page.mediabox.height)
+    scale = 0.95
+    canvas = PdfWriter()
+    target = canvas.add_blank_page(width=width, height=height)
+    target.merge_transformed_page(
+        page,
+        Transformation().scale(scale).translate(
+            width * (1 - scale) / 2,
+            height * (1 - scale) / 2,
+        ),
+    )
+    temporary = pdf_path.with_suffix(".statement-scaled.pdf")
+    with temporary.open("wb") as stream:
+        canvas.write(stream)
+    temporary.replace(pdf_path)
+
+
+def _shift_comparison_pdf_right(pdf_path: Path) -> None:
+    """Move the complete comparison page right by 1.5 mm without resizing."""
+    reader = PdfReader(pdf_path)
+    if len(reader.pages) != 1:
+        return
+    page = reader.pages[0]
+    width = float(page.mediabox.width)
+    height = float(page.mediabox.height)
+    canvas = PdfWriter()
+    target = canvas.add_blank_page(width=width, height=height)
+    target.merge_transformed_page(page, Transformation().translate(4.252, 0))
+    temporary = pdf_path.with_suffix(".comparison-shifted.pdf")
+    with temporary.open("wb") as stream:
+        canvas.write(stream)
+    temporary.replace(pdf_path)
+
+
+def _center_comparison_title(pdf_path: Path) -> None:
+    """Center only the comparison title text without moving other content."""
+    reader = PdfReader(pdf_path)
+    if len(reader.pages) != 1:
+        return
+    page = reader.pages[0]
+    content = ContentStream(page.get_contents(), reader)
+    in_first_text_object = False
+    adjusted = False
+    for operands, operator in content.operations:
+        if operator == b"BT" and not adjusted:
+            in_first_text_object = True
+        elif operator == b"ET" and in_first_text_object:
+            break
+        elif operator == b"Td" and in_first_text_object:
+            operands[0] = FloatObject(float(operands[0]) + 4.66)
+            adjusted = True
+    if not adjusted:
+        raise ValueError("Comparison PDF is missing its title text position.")
+    page.replace_contents(content)
+    writer = PdfWriter()
+    writer.add_page(page)
+    temporary = pdf_path.with_suffix(".comparison-title-centered.pdf")
+    with temporary.open("wb") as stream:
+        writer.write(stream)
+    temporary.replace(pdf_path)
+
+
+def _prepare_quotation_render_copy(workbook_path: Path) -> None:
+    """Match the authoritative Excel quotation print placement in LibreOffice."""
+    temporary = workbook_path.with_suffix(".quotation-layout.xlsx")
+    sheet_part = "xl/worksheets/sheet1.xml"
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    ElementTree.register_namespace("", namespace)
+
+    with zipfile.ZipFile(workbook_path, "r") as source:
+        members = [
+            (deepcopy(entry), source.read(entry.filename))
+            for entry in source.infolist()
+        ]
+
+    with zipfile.ZipFile(temporary, "w") as destination:
+        for entry, payload in members:
+            if entry.filename == sheet_part:
+                root = ElementTree.fromstring(payload)
+                row_heights = {
+                    5: 20.4,
+                    7: 5.6,
+                    **{row: 29.15 for row in range(8, 12)},
+                    **{row: 21.65 for row in range(16, 27)},
+                    **{row: 27.18 for row in range(27, 30)},
+                    **{row: 26.72 for row in range(30, 35)},
+                }
+                for row in root.findall(f".//{{{namespace}}}row"):
+                    row_number = int(row.get("r", "0"))
+                    if row_number in row_heights:
+                        row.set("ht", str(row_heights[row_number]))
+                        row.set("customHeight", "1")
+                for row_number in range(16, 27):
+                    description = root.find(
+                        f".//{{{namespace}}}c[@r='B{row_number}']"
+                    )
+                    has_item = description is not None and (
+                        description.find(f"{{{namespace}}}is") is not None
+                        or description.find(f"{{{namespace}}}v") is not None
+                    )
+                    if has_item:
+                        continue
+                    amount = root.find(
+                        f".//{{{namespace}}}c[@r='F{row_number}']"
+                    )
+                    if amount is None:
+                        continue
+                    formula = amount.find(f"{{{namespace}}}f")
+                    if formula is not None:
+                        amount.remove(formula)
+                    cached = amount.find(f"{{{namespace}}}v")
+                    if cached is not None:
+                        amount.remove(cached)
+                for reference, label in (
+                    ("G2", "DATE :\u00a0"),
+                    ("G3", "CLIENT :\u00a0"),
+                    ("G4", "PRODUCT :\u00a0"),
+                ):
+                    cell = root.find(
+                        f".//{{{namespace}}}c[@r='{reference}']"
+                    )
+                    if cell is None:
+                        raise ValueError(
+                            f"Quotation workbook is missing label cell {reference}."
+                        )
+                    for child in list(cell):
+                        cell.remove(child)
+                    cell.set("t", "inlineStr")
+                    inline = ElementTree.SubElement(
+                        cell,
+                        f"{{{namespace}}}is",
+                    )
+                    text = ElementTree.SubElement(
+                        inline,
+                        f"{{{namespace}}}t",
+                    )
+                    text.set(
+                        "{http://www.w3.org/XML/1998/namespace}space",
+                        "preserve",
+                    )
+                    text.text = label
+                print_options = root.find(f"{{{namespace}}}printOptions")
+                if print_options is None:
+                    raise ValueError("Quotation workbook is missing print options.")
+                print_options.attrib.pop("verticalCentered", None)
+                page_setup = root.find(f"{{{namespace}}}pageSetup")
+                if page_setup is None:
+                    raise ValueError("Quotation workbook is missing page setup.")
+                page_setup.set("scale", "90")
+                payload = ElementTree.tostring(
+                    root,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                )
+            destination.writestr(entry, payload)
+    temporary.replace(workbook_path)
+
+
+def _align_quotation_pdf_to_reference(pdf_path: Path) -> None:
+    """Correct LibreOffice's quotation-only vertical compression as vectors."""
+    reader = PdfReader(pdf_path)
+    if len(reader.pages) != 1:
+        return
+    page = reader.pages[0]
+    width = float(page.mediabox.width)
+    height = float(page.mediabox.height)
+    canvas = PdfWriter()
+    target = canvas.add_blank_page(width=width, height=height)
+    target.merge_transformed_page(
+        page,
+        Transformation().scale(1.0, 1.09).translate(-5.1, -88.2),
+    )
+    temporary = pdf_path.with_suffix(".quotation-aligned.pdf")
     with temporary.open("wb") as stream:
         canvas.write(stream)
     temporary.replace(pdf_path)

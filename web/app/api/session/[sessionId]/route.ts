@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
-import { readSession, sessionRoot, validSession } from "@/lib/server";
+import { readSession, validSession, writeSession } from "@/lib/server";
 
 export const runtime = "nodejs";
 
@@ -58,11 +56,7 @@ export async function PATCH(
     }
     session.reviewSettings = body.reviewSettings;
   }
-  await writeFile(
-    path.join(sessionRoot, sessionId, "session.json"),
-    `${JSON.stringify(session, null, 2)}\n`,
-    "utf8",
-  );
+  await writeSession(sessionId, session);
   return NextResponse.json({
     comparisonMarkupPercentage: session.comparisonMarkupPercentage,
     reviewSettings: session.reviewSettings,

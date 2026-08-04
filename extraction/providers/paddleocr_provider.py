@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+from contextlib import contextmanager
 from collections.abc import Iterable, Mapping, Sequence
 from html.parser import HTMLParser
 from pathlib import Path
@@ -88,7 +89,9 @@ class PaddleOCRProvider(OCRProvider):
                 f"expected one of: {supported}."
             )
 
-        pipeline = self._pipeline or self._build_pipeline()
+        if self._pipeline is None:
+            self._pipeline = self._build_pipeline()
+        pipeline = self._pipeline
         pages = list(pipeline.predict(str(source)))
         if not pages:
             raise ValueError(f"PaddleOCR returned no results for {source}.")
@@ -104,10 +107,18 @@ class PaddleOCRProvider(OCRProvider):
                 '`python3 -m pip install "paddleocr[doc-parser]"`.'
             ) from error
 
-        return PPStructureV3(
-            lang=self.language,
-            use_table_recognition=True,
-        )
+        with _skip_disabled_chart_model():
+            return PPStructureV3(
+                lang=self.language,
+                use_table_recognition=True,
+                use_formula_recognition=False,
+                use_chart_recognition=False,
+                use_seal_recognition=False,
+                use_region_detection=False,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+            )
 
     def _convert_results(self, results: Sequence[Any]) -> OCRResult:
         page_maps = [_result_mapping(result) for result in results]
@@ -165,6 +176,32 @@ class PaddleOCRProvider(OCRProvider):
                 "paddleocr_version": _package_version("paddleocr"),
             },
         )
+
+
+@contextmanager
+def _skip_disabled_chart_model() -> Iterable[None]:
+    """Avoid PaddleX's unconditional chart-model load when charts are disabled."""
+    try:
+        from paddlex.inference.pipelines.base import BasePipeline
+    except (ImportError, ModuleNotFoundError):
+        yield
+        return
+
+    original = BasePipeline.create_model
+
+    def create_model(pipeline: Any, config: Mapping[str, Any], **kwargs: Any) -> Any:
+        if (
+            config.get("model_name") == "PP-Chart2Table"
+            and not getattr(pipeline, "use_chart_recognition", True)
+        ):
+            return None
+        return original(pipeline, config, **kwargs)
+
+    BasePipeline.create_model = create_model
+    try:
+        yield
+    finally:
+        BasePipeline.create_model = original
 
 
 def _convert_table(data: Mapping[str, Any], page: int) -> DetectedTable:

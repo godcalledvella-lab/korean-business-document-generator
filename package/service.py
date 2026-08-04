@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -70,6 +71,7 @@ class PDFPackageGenerator:
                         "page-4-comparison.pdf",
                     ),
                 )
+                prepared_jobs = []
                 for step_number, label, source, name in render_jobs:
                     self.log(f"[{step_number}/8] Rendering {label} PDF...")
                     source = source.resolve()
@@ -81,7 +83,29 @@ class PDFPackageGenerator:
                             working_path=work,
                         )
                     destination = work / name
-                    result = selected.render_xlsx(source, destination)
+                    prepared_jobs.append((label, source, destination))
+
+                if selected.name == "libreoffice":
+                    with ThreadPoolExecutor(max_workers=2) as executor:
+                        futures = [
+                            executor.submit(
+                                selected.render_xlsx,
+                                source,
+                                destination,
+                            )
+                            for _, source, destination in prepared_jobs
+                        ]
+                        render_results = [future.result() for future in futures]
+                else:
+                    render_results = [
+                        selected.render_xlsx(source, destination)
+                        for _, source, destination in prepared_jobs
+                    ]
+
+                for (label, source, destination), result in zip(
+                    prepared_jobs,
+                    render_results,
+                ):
                     renders.append(result)
                     if result.source_hash_before != result.source_hash_after:
                         raise PackageError(

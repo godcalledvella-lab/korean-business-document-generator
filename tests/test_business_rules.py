@@ -80,9 +80,9 @@ class BusinessRuleEngineTests(unittest.TestCase):
             Decimal("0.08"),
         )
         self.assertEqual(first_item["base"]["unit_price"], 1500000)
-        self.assertEqual(first_item["comparison"]["unit_price"], 1620000)
+        self.assertEqual(first_item["comparison"]["unit_price"], 1782000)
         self.assertEqual(
-            comparison.data["document"]["totals"]["comparison"]["total"],
+            comparison.data["document"]["totals"]["comparison"]["supply_amount"],
             4158000,
         )
 
@@ -116,7 +116,7 @@ class BusinessRuleEngineTests(unittest.TestCase):
                 comparison.data["document"]["items"][0]["comparison"][
                     "unit_price"
                 ],
-                1687500,
+                1856250,
             )
 
     def test_decimal_safe_rounding_is_configurable(self) -> None:

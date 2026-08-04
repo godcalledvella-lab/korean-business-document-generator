@@ -68,7 +68,7 @@ def test_successful_generation_of_all_documents(tmp_path):
     assert {result.document: result.total for result in report.documents} == {
         "statement": Decimal("3850000"),
         "quotation": Decimal("3850000"),
-        "comparison": Decimal("3780000"),
+        "comparison": Decimal("4158000"),
     }
     expected_sheets = {
         "statement.xlsx": "청구서",
@@ -178,9 +178,7 @@ def test_comparison_uses_configured_markup(tmp_path):
 
     assert report.comparison_markup == generator.configuration()[0]
     assert report.comparison_markup == Decimal("0.08")
-    assert comparison.total == Decimal("3500000") * (
-        Decimal(1) + report.comparison_markup
-    )
+    assert comparison.total == Decimal("4158000")
 
 
 def test_source_templates_remain_unchanged_after_generation(tmp_path):
@@ -223,7 +221,7 @@ def test_cli_reports_configuration_status_outputs_and_totals(tmp_path):
         "Quotation: success",
         "Comparison: success",
         "Total: 3850000",
-        "Total: 3780000",
+        "Total: 4158000",
         "Generation succeeded:",
     ):
         assert expected in completed.stdout

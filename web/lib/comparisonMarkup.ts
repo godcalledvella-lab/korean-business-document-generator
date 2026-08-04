@@ -38,13 +38,17 @@ export function comparisonSupplyAmount(
       typeof item.unit_price !== "number" ||
       !Number.isFinite(item.unit_price) ||
       typeof item.quantity !== "number" ||
-      !Number.isFinite(item.quantity)
+      !Number.isFinite(item.quantity) ||
+      item.quantity <= 0 ||
+      typeof item.total !== "number" ||
+      !Number.isFinite(item.total)
     ) {
       return total;
     }
+    const quotationUnitPrice = item.total / item.quantity;
     const unitPrice = Math.round(
-      item.unit_price * (1 + markupPercentage / 100),
+      quotationUnitPrice * (1 + markupPercentage / 100),
     );
-    return total + Math.round(unitPrice * item.quantity);
+    return total + unitPrice * item.quantity;
   }, 0);
 }

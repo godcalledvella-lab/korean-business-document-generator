@@ -52,7 +52,7 @@ export type ReviewDocumentSettings = {
 
 export function defaultReviewDocumentSettings(
   draft: InvoiceDraft,
-  confidences: Record<string, number> = {},
+  _confidences: Record<string, number> = {},
 ): ReviewDocumentSettings {
   const descriptions = draft.document.items
     .map((item) => item.description || "")
@@ -61,18 +61,11 @@ export function defaultReviewDocumentSettings(
     descriptions.length <= 1
       ? descriptions[0] || ""
       : `${descriptions[0]} 외 ${descriptions.length - 1}건`;
-  const seller = draft.document.seller;
-  const confidentSellerName = confidentText(
-    seller.name,
-    confidences["document.seller.name"],
-  );
-  const knownRmntc = isKnownRmntcSeller(seller, confidences);
   const templateCompanyName = "로맨틱어스";
-  const statementCompanyName = confidentSellerName || templateCompanyName;
   return {
     statement: {
-      sender: statementCompanyName,
-      companyName: statementCompanyName,
+      sender: templateCompanyName,
+      companyName: templateCompanyName,
       bank: "신한은행",
       accountNumber: "110-427-856988",
     },
@@ -84,51 +77,14 @@ export function defaultReviewDocumentSettings(
       showRemark: true,
       remark: "VAT 별도",
       informationBar: {
-        companyName: visible(
-          knownRmntc
-            ? confidentText(seller.name, confidences["document.seller.name"])
-            : templateCompanyName,
-        ),
-        businessNumber: visible(
-          knownRmntc
-            ? confidentText(
-                seller.business_registration_number,
-                confidences["document.seller.business_registration_number"],
-              )
-            : "102-21-34572",
-        ),
-        address: visible(
-          knownRmntc
-            ? confidentText(
-                seller.address,
-                confidences["document.seller.address"],
-              )
-            : "경상남도 창원시 성산구 외동반림로126번길 57, 1층",
-        ),
-        representative: visible(
-          knownRmntc
-            ? confidentText(
-                seller.representative,
-                confidences["document.seller.representative"],
-              )
-            : "정성우",
-        ),
+        companyName: visible(templateCompanyName),
+        businessNumber: visible("102-21-34572"),
+        address: visible("경상남도 창원시 성산구 외동반림로126번길 57, 1층"),
+        representative: visible("정성우"),
       },
       footer: {
-        telephone:
-          knownRmntc
-            ? confidentText(
-                seller.contact?.phone,
-                confidences["document.seller.contact.phone"],
-              ) || "010-8579-0342"
-            : "010-8579-0342",
-        email:
-          knownRmntc
-            ? confidentText(
-                seller.contact?.email,
-                confidences["document.seller.contact.email"],
-              ) || "rmntcearth@gmail.com"
-            : "rmntcearth@gmail.com",
+        telephone: "010-8579-0342",
+        email: "bigthumbdesigner@gmail.com",
         bank: "신한은행",
         accountNumber: "110-427-856988",
       },
@@ -191,35 +147,4 @@ function visible(value: unknown): VisibilityField {
     value: typeof value === "string" ? value : "",
     visible: true,
   };
-}
-
-function confidentText(value: unknown, confidence: unknown): string {
-  return typeof value === "string" &&
-    value.trim() !== "" &&
-    typeof confidence === "number" &&
-    confidence >= 0.8
-    ? value
-    : "";
-}
-
-function isKnownRmntcSeller(
-  seller: InvoiceDraft["document"]["seller"],
-  confidences: Record<string, number>,
-): boolean {
-  const name = confidentText(
-    seller.name,
-    confidences["document.seller.name"],
-  )
-    .replace(/\s+/g, "")
-    .toLowerCase();
-  const registration = confidentText(
-    seller.business_registration_number,
-    confidences["document.seller.business_registration_number"],
-  ).replace(/\D/g, "");
-  return (
-    registration === "1022134572" ||
-    name.includes("로맨틱어스") ||
-    name.includes("알엠엔티씨") ||
-    name.includes("rmntc")
-  );
 }

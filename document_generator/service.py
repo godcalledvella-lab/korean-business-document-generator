@@ -325,6 +325,9 @@ class RmntcDocumentGenerator:
         if any(
             generated_formulas.get(cell) != formula
             for cell, formula in original_formulas.items()
+            if not (
+                spec.document == "statement" and cell in {"D2", "E18"}
+            )
         ):
             raise GenerationError(
                 f"{spec.document} output changed template formulas."
@@ -399,8 +402,9 @@ class RmntcDocumentGenerator:
                     or sheet[f"D{row}"].value != item["unit_price"]
                 ):
                     raise GenerationError("Statement item values failed validation.")
-            if sheet["E18"].value != "=SUM(E7:E17)":
-                raise GenerationError("Statement total formula failed validation.")
+            expected_total = data["totals"]["total"]
+            if sheet["D2"].value != expected_total or sheet["E18"].value != expected_total:
+                raise GenerationError("Statement VAT-included total failed validation.")
         elif document == "quotation":
             for row, item in zip(range(16, 27), items):
                 if (
@@ -431,7 +435,7 @@ class RmntcDocumentGenerator:
             declared = Decimal(
                 str(data["totals"]["comparison"]["supply_amount"])
             )
-            if expected != declared or sheet["G20"].value != "=SUM(G14:G19)":
+            if declared != expected or sheet["G20"].value != "=SUM(G14:G19)":
                 raise GenerationError("Comparison totals failed validation.")
 
     def _promote_all(

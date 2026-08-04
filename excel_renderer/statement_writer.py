@@ -25,7 +25,7 @@ from business import ViewModel, ViewModelType
 
 STATEMENT_SHEET_PART = "xl/worksheets/sheet1.xml"
 ITEM_ROWS = (7, 8, 10, 11, 12, 13, 14, 15, 16, 17)
-PRESERVED_FORMULA_CELLS = ("D2", "E7", "E18")
+PRESERVED_FORMULA_CELLS = ("E7",)
 
 
 class ExcelRendererError(Exception):
@@ -160,12 +160,18 @@ def _populate_sheet(
     remarks = document.get("remarks", "")
     if not isinstance(remarks, str):
         raise InvalidStatementViewModel("document.remarks must be text.")
+    totals = _mapping(document, "totals")
+    vat_included_total = _required_number(
+        totals, "total", "document.totals.total"
+    )
 
     changes: list[tuple[str, str, Any]] = [
+        ("D2", "display_total", vat_included_total),
         ("B2", "number", issue_serial),
         ("B3", "text", f"수신자: {buyer_name}"),
         ("B4", "text", f"발신자: {seller_name}"),
         ("C20", "text", seller_name),
+        ("E18", "display_total", vat_included_total),
         ("B24", "text", remarks),
     ]
     items = document["items"]
@@ -188,7 +194,10 @@ def _populate_sheet(
     modified: list[str] = []
     created_formulas: list[str] = []
     for reference, kind, value in changes:
-        updated, changed = _set_cell(updated, reference, kind, value)
+        if kind == "display_total":
+            updated, changed = _set_display_total(updated, reference, value)
+        else:
+            updated, changed = _set_cell(updated, reference, kind, value)
         if changed:
             modified.append(reference)
 
@@ -218,13 +227,34 @@ def _required_text(parent: Mapping[str, Any], key: str, label: str) -> str:
     return value
 
 
-def _required_number(parent: Mapping[str, Any], key: str, row: int) -> int | float | Decimal:
+def _required_number(parent: Mapping[str, Any], key: str, label: int | str) -> int | float | Decimal:
     value = parent.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
-        raise InvalidStatementViewModel(f"Item row {row} {key} must be numeric.")
+        raise InvalidStatementViewModel(f"{label} {key} must be numeric.")
     if isinstance(value, float) and not math.isfinite(value):
-        raise InvalidStatementViewModel(f"Item row {row} {key} must be finite.")
+        raise InvalidStatementViewModel(f"{label} {key} must be finite.")
     return value
+
+
+def _set_display_total(
+    xml: str,
+    reference: str,
+    value: int | float | Decimal,
+) -> tuple[str, bool]:
+    """Replace a template total formula while retaining the cell's style."""
+
+    pattern = _cell_pattern(reference)
+    match = pattern.search(xml)
+    if not match:
+        raise TemplateStructureError(
+            f"Required Statement total cell {reference} is missing."
+        )
+    attrs = match.group("attrs") or match.group("attrs_full")
+    attrs = re.sub(r'\s+t="[^"]*"', "", attrs)
+    replacement = f"<c{attrs}><v>{_number_text(value)}</v></c>"
+    if match.group(0) == replacement:
+        return xml, False
+    return xml[: match.start()] + replacement + xml[match.end() :], True
 
 
 def _cell_pattern(reference: str) -> re.Pattern[str]:

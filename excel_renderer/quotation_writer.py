@@ -125,9 +125,15 @@ def _populate_sheet(
     seller_representative = _required_text(
         seller, "representative", "document.seller.representative"
     )
+    seller_business_type = _optional_text(
+        seller, "business_type", "document.seller.business_type"
+    )
+    seller_business_item = _optional_text(
+        seller, "business_item", "document.seller.business_item"
+    )
     buyer_name = _required_text(buyer, "name", "document.buyer.name")
     contact = _mapping(seller, "contact")
-    phone = _required_text(contact, "phone", "document.seller.contact.phone")
+    phone = _optional_text(contact, "phone", "document.seller.contact.phone")
     email = _required_text(contact, "email", "document.seller.contact.email")
     supply_amount = _required_number(
         totals, "supply_amount", "document.totals.supply_amount"
@@ -155,22 +161,26 @@ def _populate_sheet(
         if len(product_names) <= 24
         else f"{product_descriptions[0]} 외 {len(product_descriptions) - 1}건"
     )
+    footer_contact = (
+        f"TEL : {phone} / E-mail : {email}" if phone else f"E-mail : {email}"
+    )
 
     changes: list[tuple[str, str, Any]] = [
         ("H2", "number", issue_serial),
-        ("H3", "text", _wrap_template_text(f"{buyer_name} 귀하")),
+        ("H3", "text", f"{buyer_name}\u00a0귀하"),
         ("H4", "text", product_label),
         (
             "A6",
             "text",
             f"■ 상호 : {seller_name}    ■ 사업자번호 : {seller_registration}"
-            f"    ■ 주소 : {seller_address}    ■ 대표자 : {seller_representative}    ",
+            f"    ■ 업종 : {seller_business_type}    ■ 업태 : {seller_business_item}"
+            f"\n■ 주소 : {seller_address}    ■ 대표자 : {seller_representative}    ",
         ),
         ("B8", "text", product_names),
-        ("C14", "text", korean_amount_words(supply_amount)),
+        ("C14", "text", f"{korean_amount_words(supply_amount)} 원 정"),
         ("F28", "number", vat),
         ("B30", "text", remarks),
-        ("A35", "text", f"TEL : {phone} / E-mail : {email}"),
+        ("A35", "text", footer_contact),
     ]
 
     for index, row in enumerate(ITEM_ROWS):
@@ -300,7 +310,9 @@ def korean_amount_words(value: int | float | Decimal) -> str:
             for position in range(3, -1, -1):
                 digit = (group // (10**position)) % 10
                 if digit:
-                    text += digits[digit] + small_units[position]
+                    if digit != 1 or position == 0:
+                        text += digits[digit]
+                    text += small_units[position]
             groups.append(text + large_units[group_index])
         amount //= 10000
         group_index += 1

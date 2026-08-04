@@ -143,7 +143,9 @@ def test_existing_formulas_are_untouched_and_only_blank_item_formulas_are_added(
 
     original = _formula_map(before[STATEMENT_SHEET_PART])
     rendered = _formula_map(after[STATEMENT_SHEET_PART])
-    assert all(rendered[cell] == formula for cell, formula in original.items())
+    assert rendered["E7"] == original["E7"]
+    assert "D2" not in rendered
+    assert "E18" not in rendered
     assert rendered["E8"] == "(D8*B8)"
     assert rendered["E10"] == "(D10*B10)"
     assert set(rendered) - set(original) == {"E8", "E10"}
@@ -173,9 +175,10 @@ def test_generated_workbook_is_a_valid_openable_ooxml_package(
     statement = workbook["청구서"]
     assert workbook.sheetnames == ["청구서", "Sheet1"]
     assert len(statement._images) == 1
-    assert statement["D2"].value == "=E17+E18"
+    expected_total = statement_view_model.data["document"]["totals"]["total"]
+    assert statement["D2"].value == expected_total
     assert statement["E7"].value == "=(D7*B7)"
-    assert statement["E18"].value == "=SUM(E7:E17)"
+    assert statement["E18"].value == expected_total
     workbook.close()
 
 

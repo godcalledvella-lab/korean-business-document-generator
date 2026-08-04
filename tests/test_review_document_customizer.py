@@ -102,13 +102,16 @@ def test_review_settings_change_only_mapped_values(tmp_path):
 
     quotation = load_workbook(generated / "quotation.xlsx", data_only=False)
     blue = quotation["견적서"]
-    assert blue["H3"].value.replace("\n", " ") == "사단법인 대한공도협회 귀하"
+    assert blue["H3"].value.replace("\n", " ").replace("\u00a0", " ") == (
+        "사단법인 대한공도협회 귀하"
+    )
     assert blue["H4"].value == "트로피 외 5건"
     assert blue["B8"].value == "트로피, 현수막, 모자, 책자, 우산, 배지"
     assert blue["B30"].value == "VAT 별도"
-    assert "업태" not in blue["A6"].value
-    assert "종목" not in blue["A6"].value
-    assert blue["A6"].value.count("■") == 4
+    assert "■ 업종 : 서비스업" in blue["A6"].value
+    assert "■ 업태 : 경영 컨설팅 및 소프트웨어 개발" in blue["A6"].value
+    assert "\n■ 주소 : 서울특별시" in blue["A6"].value
+    assert blue["A6"].value.count("■") == 6
     assert blue["A35"].value == (
         "TEL : 02-1111-2222 / E-mail : review@example.com"
         " / 계좌번호 : 검토은행 123-456"
@@ -126,7 +129,7 @@ def test_review_settings_change_only_mapped_values(tmp_path):
     assert green["F8"].value == "제조업"
     assert green["I8"].value == "OEM ODM 제조"
     assert green["F9"].value == green["I9"].value == "010-4480-7709"
-    assert green["B11"].value == "삼백칠십팔만"
+    assert green["B11"].value == "사백십오만팔천"
     assert green["G20"].value == "=SUM(G14:G19)"
     comparison.close()
 
@@ -147,7 +150,7 @@ def test_review_settings_change_only_mapped_values(tmp_path):
         assert _structure(before[sheet_part]) == _structure(after[sheet_part])
 
 
-def test_review_defaults_are_derived_without_changing_invoice_data():
+def test_review_defaults_use_fixed_rmntc_display_values():
     source = (
         "import fs from 'node:fs';"
         "import {defaultReviewDocumentSettings} from "
@@ -182,8 +185,8 @@ def test_review_defaults_are_derived_without_changing_invoice_data():
     )
     settings = json.loads(completed.stdout)
     assert settings["statement"] == {
-        "sender": "알엠엔티씨 주식회사",
-        "companyName": "알엠엔티씨 주식회사",
+        "sender": "로맨틱어스",
+        "companyName": "로맨틱어스",
         "bank": "신한은행",
         "accountNumber": "110-427-856988",
     }
@@ -202,10 +205,19 @@ def test_review_defaults_are_derived_without_changing_invoice_data():
         "hp": "010-4480-7709",
     }
     assert settings["blueQuotation"]["footer"] == {
-        "telephone": "02-1234-5678",
-        "email": "billing@rmntc.example",
+        "telephone": "010-8579-0342",
+        "email": "bigthumbdesigner@gmail.com",
         "bank": "신한은행",
         "accountNumber": "110-427-856988",
+    }
+    assert settings["blueQuotation"]["informationBar"] == {
+        "companyName": {"value": "로맨틱어스", "visible": True},
+        "businessNumber": {"value": "102-21-34572", "visible": True},
+        "address": {
+            "value": "경상남도 창원시 성산구 외동반림로126번길 57, 1층",
+            "visible": True,
+        },
+        "representative": {"value": "정성우", "visible": True},
     }
 
 
@@ -248,7 +260,7 @@ def test_low_confidence_unknown_seller_keeps_template_defaults():
     )
     assert settings["blueQuotation"]["footer"] == {
         "telephone": "010-8579-0342",
-        "email": "rmntcearth@gmail.com",
+        "email": "bigthumbdesigner@gmail.com",
         "bank": "신한은행",
         "accountNumber": "110-427-856988",
     }

@@ -305,10 +305,6 @@ def export_excel_pdf(
 
     script = _script_for_strategy(strategy)
     command = build_osascript_command(source_path, output_path, worksheet, strategy)
-    print("----- BEGIN EXACT APPLESCRIPT -----", flush=True)
-    print(script, flush=True)
-    print("----- END EXACT APPLESCRIPT -----", flush=True)
-    print(f"DEBUG output path passed to osascript: {output_path}", flush=True)
     with tempfile.TemporaryDirectory(prefix="excel-pdf-applescript-") as temp_dir:
         script_path = Path(temp_dir) / "export.applescript"
         compiled_path = Path(temp_dir) / "export.scpt"
@@ -348,7 +344,6 @@ def export_excel_pdf(
                 "AppleScript compilation failed with osacompile exit code "
                 f"{compile_result.returncode}."
             )
-        print("DEBUG osacompile validation succeeded", flush=True)
     try:
         completed = subprocess.run(
             command,
@@ -372,13 +367,7 @@ def export_excel_pdf(
             f"{completed.returncode}. AppleScript output was streamed above."
             f"{permission_help}"
         )
-    output_exists = output_path.is_file()
-    print(
-        f"DEBUG output file exists after osascript returned: "
-        f"{str(output_exists).lower()}",
-        flush=True,
-    )
-    if not output_exists or output_path.stat().st_size == 0:
+    if not output_path.is_file() or output_path.stat().st_size == 0:
         raise ExcelPdfExportError(
             f"Microsoft Excel reported success but did not create a PDF: {output_path}"
         )

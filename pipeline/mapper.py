@@ -46,12 +46,7 @@ class OCRInvoiceMapper:
                 ("작성일자", "발행일자"),
                 value_pattern=re.compile(r"\d{4}\s*[-./년]\s*\d{1,2}"),
             ),
-            "approval_number": _field(
-                result,
-                lines,
-                ("승인번호",),
-                value_pattern=re.compile(r"\d{8}\s*-\s*\d{8}\s*-\s*\d+"),
-            ),
+            "approval_number": _approval_number(result, lines),
             "supplier": _party(result, lines, "공급자"),
             "buyer": _party(result, lines, "공급받는자"),
             "items": _items(result),
@@ -183,6 +178,9 @@ def _party(
                         )
                     ),
                 )
+        spatial["company_name"] = _preserve_legal_entity_spacing(
+            spatial["company_name"]
+        )
         spatial["email"] = _review_invalid_email(spatial["email"])
         return spatial
 
@@ -202,6 +200,9 @@ def _party(
         )
         for field, labels in aliases.items()
     }
+    mapped["company_name"] = _preserve_legal_entity_spacing(
+        mapped["company_name"]
+    )
     mapped["email"] = _review_invalid_email(mapped["email"])
     return mapped
 
@@ -259,6 +260,7 @@ def _header(value: str) -> str | None:
         ("규격", "specification"),
         ("단위", "unit"),
         ("수량", "quantity"),
+        ("수랑", "quantity"),
         ("단가", "unit_price"),
         ("공급가액", "supply_amount"),
         ("세액", "tax_amount"),
@@ -266,6 +268,39 @@ def _header(value: str) -> str | None:
         ("비고", "remark"),
     )
     return next((field for label, field in aliases if label in compact), None)
+
+
+def _approval_number(
+    result: OCRResult,
+    lines: list[str],
+) -> dict[str, object] | None:
+    """Preserve OCR evidence while normalizing spaces inside approval digits."""
+    candidates: list[tuple[float, str, float | None, str]] = []
+    for region in _regions(result):
+        normalized = re.sub(r"\s", "", region.text).replace("–", "-")
+        match = re.search(r"\d{8}-\d{8}-\d+", normalized)
+        if match is not None:
+            candidates.append(
+                (
+                    region.bounding_box.y,
+                    match.group(0),
+                    region.confidence,
+                    region.text,
+                )
+            )
+    if candidates:
+        _, value, confidence, source_text = min(candidates, key=lambda item: item[0])
+        return {
+            "value": value,
+            "confidence": confidence,
+            "source_text": source_text,
+        }
+    return _field(
+        result,
+        lines,
+        ("승인번호",),
+        value_pattern=re.compile(r"\d{8}\s*-\s*\d{8}\s*-\s*\d+"),
+    )
 
 
 def _classification(
@@ -453,11 +488,12 @@ def _party_spatial_field(
 def _registration_number(
     result: OCRResult, bounds: tuple[float, float]
 ) -> dict[str, object] | None:
+    normalized = _normalized_geometry(result)
     candidates = [
         region
         for region in _regions(result)
         if _in_bounds(region, bounds)
-        and region.bounding_box.y < 100
+        and region.bounding_box.y < (0.25 if normalized else 100)
         and re.fullmatch(
             r"\s*\d\s*\d\s*\d\s*-\s*\d\s*\d\s*-\s*"
             r"\d\s*\d\s*\d\s*\d\s*\d\s*",
@@ -479,16 +515,19 @@ def _company_name(
     result: OCRResult, bounds: tuple[float, float]
 ) -> dict[str, object] | None:
     excluded = ("상호", "법인명", "성명", "대표자", "사업장", "주소")
+    normalized = _normalized_geometry(result)
+    y_min, y_max = (0.10, 0.22) if normalized else (45, 78)
+    x_offset = 0.05 if normalized else 70
     candidates = [
         region
         for region in _regions(result)
         if _in_bounds(region, bounds)
-        and 45 <= region.bounding_box.y <= 78
+        and y_min <= region.bounding_box.y <= y_max
         and not _matches_label(region.text, excluded)
         and not re.search(r"\d{3}\s*-\s*\d{2}\s*-\s*\d{5}", region.text)
         and len(region.text.strip()) >= 3
         and not region.text.strip().startswith("(")
-        and region.bounding_box.x >= bounds[0] + 70
+        and region.bounding_box.x >= bounds[0] + x_offset
     ]
     if not candidates:
         return None
@@ -507,9 +546,27 @@ def _party_address(
     anchors = [
         region
         for region in regions
-        if _compact(region.text) in {"사업장", "사업장주소"}
+        if _compact(region.text) in {"사업장", "사업장주소", "사업성"}
     ]
     if not anchors:
+        if _normalized_geometry(result):
+            candidates = [
+                region
+                for region in regions
+                if 0.19 <= region.bounding_box.y <= 0.26
+                and re.search(r"\d", region.text)
+                and re.search(
+                    r"(?:특별시|광역시|도|시|군|구|로|길|동|읍|면)",
+                    region.text,
+                )
+            ]
+            if candidates:
+                candidate = max(candidates, key=lambda region: len(region.text))
+                return {
+                    "value": candidate.text.strip(),
+                    "confidence": candidate.confidence,
+                    "source_text": candidate.text,
+                }
         return None
     anchor = min(anchors, key=lambda region: region.bounding_box.y)
     box = anchor.bounding_box
@@ -551,6 +608,17 @@ def _party_address(
     }
 
 
+def _normalized_geometry(result: OCRResult) -> bool:
+    regions = _regions(result)
+    return bool(regions) and max(
+        max(
+            region.bounding_box.x + region.bounding_box.width,
+            region.bounding_box.y + region.bounding_box.height,
+        )
+        for region in regions
+    ) <= 1.000001
+
+
 def _review_invalid_email(
     field: dict[str, object] | None,
 ) -> dict[str, object] | None:
@@ -566,6 +634,19 @@ def _review_invalid_email(
     field = dict(field)
     field["confidence"] = min(float(confidence), 0.79) if confidence is not None else 0.79
     return field
+
+
+def _preserve_legal_entity_spacing(
+    field: dict[str, object] | None,
+) -> dict[str, object] | None:
+    if field is None or not isinstance(field.get("value"), str):
+        return field
+    value = re.sub(r"^(사단법인|재단법인)(?=\S)", r"\1 ", field["value"])
+    if value == field["value"]:
+        return field
+    normalized = dict(field)
+    normalized["value"] = value
+    return normalized
 
 
 def _spatial_items(result: OCRResult) -> list[dict[str, object | None]]:

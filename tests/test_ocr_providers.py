@@ -23,6 +23,7 @@ from extraction.providers.mock_provider import MockProvider
 from extraction.providers.paddleocr_provider import (
     PaddleOCRDependencyError,
     PaddleOCRProvider,
+    _skip_disabled_chart_model,
 )
 from extraction.service import TaxInvoiceExtractionService
 
@@ -209,6 +210,53 @@ def test_paddle_provider_rejects_unsupported_input(tmp_path):
     path.write_bytes(b"image")
     with pytest.raises(ValueError, match="Unsupported PaddleOCR input type"):
         PaddleOCRProvider(pipeline=_FakePaddlePipeline([])).extract(path)
+
+
+def test_paddle_provider_initializes_pipeline_only_once(tmp_path, monkeypatch):
+    path = tmp_path / "invoice.png"
+    path.write_bytes(b"image")
+    pipeline = _FakePaddlePipeline([_paddle_page()])
+    builds = 0
+
+    def build_pipeline():
+        nonlocal builds
+        builds += 1
+        return pipeline
+
+    provider = PaddleOCRProvider()
+    monkeypatch.setattr(provider, "_build_pipeline", build_pipeline)
+
+    provider.extract(path)
+    provider.extract(path)
+
+    assert builds == 1
+    assert pipeline.inputs == [str(path.resolve()), str(path.resolve())]
+
+
+def test_paddle_provider_skips_only_disabled_chart_model(monkeypatch):
+    BasePipeline = pytest.importorskip(
+        "paddlex.inference.pipelines.base"
+    ).BasePipeline
+
+    delegated = []
+
+    def original(pipeline, config, **kwargs):
+        delegated.append((config, kwargs))
+        return "model"
+
+    monkeypatch.setattr(BasePipeline, "create_model", original)
+    pipeline = type("Pipeline", (), {"use_chart_recognition": False})()
+
+    with _skip_disabled_chart_model():
+        assert BasePipeline.create_model(
+            pipeline, {"model_name": "PP-Chart2Table"}
+        ) is None
+        assert BasePipeline.create_model(
+            pipeline, {"model_name": "PP-DocLayout_plus-L"}
+        ) == "model"
+
+    assert delegated == [({"model_name": "PP-DocLayout_plus-L"}, {})]
+    assert BasePipeline.create_model is original
 
 
 def test_paddle_provider_reconstructs_lines_and_preserves_punctuation(tmp_path):

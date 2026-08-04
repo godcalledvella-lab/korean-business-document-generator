@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -146,6 +147,7 @@ def _assert_only_mapped_cells_changed(
     output: Path,
     sheet_part: str,
     modified_cells: tuple[str, ...],
+    changed_formula_cells: tuple[str, ...] = (),
 ) -> None:
     before = _parts(source)
     after = _parts(output)
@@ -162,7 +164,12 @@ def _assert_only_mapped_cells_changed(
     assert _structural_fragments(before[sheet_part]) == _structural_fragments(
         after[sheet_part]
     )
-    assert _formula_map(before[sheet_part]) == _formula_map(after[sheet_part])
+    before_formulas = _formula_map(before[sheet_part])
+    after_formulas = _formula_map(after[sheet_part])
+    for reference in changed_formula_cells:
+        before_formulas.pop(reference, None)
+        after_formulas.pop(reference, None)
+    assert before_formulas == after_formulas
     preserved = _preserved_parts(before)
     assert "xl/styles.xml" in preserved
     assert all(before[name] == after[name] for name in preserved)
@@ -196,21 +203,24 @@ def test_quotation_values_totals_and_ooxml_are_preserved(tmp_path, engine, invoi
     workbook = load_workbook(output, data_only=False)
     sheet = workbook["견적서"]
     assert sheet["H2"].value.date().isoformat() == "2026-07-29"
-    assert sheet["H3"].value == "주식회사 한빛상사 귀하"
+    assert sheet["H3"].value == "주식회사 한빛상사\u00a0귀하"
     product_names = ", ".join(
         item["description"] for item in invoice["document"]["items"]
     )
     assert sheet["H4"].value == "업무 프로세스 분석 외 2건"
     assert sheet["B8"].value == product_names
     assert sheet["A6"].value.startswith("■ 상호 : 알엠엔티씨 주식회사")
-    assert sheet["A6"].value.count("■") == 4
+    assert sheet["A6"].value.count("■") == 6
+    assert "\n■ 주소" in sheet["A6"].value
     assert "로맨틱어스" not in sheet["A6"].value
     assert invoice["document"]["seller"]["name"] in sheet["A6"].value
     assert (
         invoice["document"]["seller"]["business_registration_number"]
         in sheet["A6"].value
     )
-    assert sheet["C14"].value == "삼백오십만"
+    assert invoice["document"]["seller"]["business_type"] in sheet["A6"].value
+    assert invoice["document"]["seller"]["business_item"] in sheet["A6"].value
+    assert sheet["C14"].value == "삼백오십만 원 정"
     assert sheet["F14"].value == "=F27"
     assert sheet["F27"].value == "=SUM(F16:G26)"
     assert sheet["F28"].value == 350000
@@ -264,6 +274,7 @@ def test_comparison_markup_totals_and_ooxml_are_preserved(
         output,
         COMPARISON_SHEET_PART,
         report.modified_cells,
+        ("G20",),
     )
 
     workbook = load_workbook(output, data_only=False)
@@ -293,11 +304,8 @@ def test_comparison_markup_totals_and_ooxml_are_preserved(
             )
         assert sheet[f"I{row}"].value == source_item["remarks"]
 
-    expected_total = sum(
-        item["comparison"]["supply_amount"] for item in document["items"]
-    )
-    assert expected_total == document["totals"]["comparison"]["supply_amount"]
-    assert expected_total == 3780000
+    expected_total = document["totals"]["comparison"]["supply_amount"]
+    assert expected_total == 4158000
 
     for row in COMPARISON_ITEM_ROWS[len(document["items"]) :]:
         for column in ("A", "C", "D", "E", "G", "I"):
@@ -305,15 +313,48 @@ def test_comparison_markup_totals_and_ooxml_are_preserved(
             assert sheet[f"{column}{row}"].style_id != 0
     workbook.close()
     calculated = load_workbook(output, data_only=True)["Sheet1"]
-    assert calculated["G14"].value == 1620000
-    assert calculated["G20"].value == 3780000
-    assert calculated["B11"].value == 3780000
+    assert calculated["G14"].value == 1782000
+    assert calculated["G20"].value == 4158000
+    assert calculated["B11"].value == 4158000
+
+
+def test_single_item_comparison_displays_marked_up_row_and_reconciled_total(
+    tmp_path, engine, invoice
+):
+    reviewed = deepcopy(invoice)
+    reviewed["document"]["items"] = [{
+        "line_number": 1,
+        "description": "트로피",
+        "quantity": 8,
+        "unit": "ea",
+        "unit_price": 300000,
+        "supply_amount": 2400000,
+        "vat": 0,
+        "total": 2400000,
+        "remarks": "",
+    }]
+    reviewed["document"]["totals"] = {
+        "supply_amount": 2400000,
+        "vat": 0,
+        "total": 2400000,
+    }
+    reviewed["extensions"] = {"rmntc.comparison_markup_percentage": 10}
+    output = tmp_path / "single-comparison.xlsx"
+
+    model = engine.create_comparison(reviewed)
+    write_comparison(COMPARISON_TEMPLATE, output, model)
+    sheet = load_workbook(output, data_only=True)["Sheet1"]
+
+    assert sheet["E14"].value == 330000
+    assert sheet["G14"].value == 2640000
+    assert sheet["G20"].value == 2640000
 
 
 def test_korean_amount_words():
     assert korean_amount_words(0) == "영"
     assert korean_amount_words(3_500_000) == "삼백오십만"
     assert korean_amount_words(123_456_789) == "일억이천삼백사십오만육천칠백팔십구"
+    assert korean_amount_words(1_456_000) == "백사십오만육천"
 
 
 @pytest.mark.skipif(

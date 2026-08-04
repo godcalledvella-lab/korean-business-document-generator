@@ -88,8 +88,13 @@ def test_default_and_quick_select_markup_values():
     assert comparison["markup"]["percentage"] == Decimal("8.00")
     assert [
         item["comparison"]["unit_price"] for item in comparison["items"]
-    ] == [216_000, 162_000, 75_600]
-    assert comparison["totals"]["comparison"]["supply_amount"] == 1_533_600
+    ] == [237_600, 178_200, 83_160]
+    assert comparison["totals"]["comparison"]["supply_amount"] == 1_686_960
+
+    assert _run_markup_javascript(
+        "markup.comparisonSupplyAmount("
+        "[{unit_price:272727,quantity:8,total:2400000}],10)"
+    ) == 2_640_000
 
 
 def test_review_uses_live_slider_exact_input_and_session_persistence():
@@ -102,7 +107,7 @@ def test_review_uses_live_slider_exact_input_and_session_persistence():
     assert 'step="0.1"' in source
     assert 'inputMode="decimal"' in source
     assert "setMarkupInput(event.target.value)" in source
-    assert "comparisonSupplyAmount(" in source
+    assert "comparisonSupplyAmount(draft.document.items" in source
     assert 'method: "PATCH"' in source
     assert "comparisonMarkupPercentage: markupValidation.value" in source
 
@@ -110,9 +115,9 @@ def test_review_uses_live_slider_exact_input_and_session_persistence():
 @pytest.mark.parametrize(
     ("percentage", "prices", "total"),
     (
-        (0, [200_000, 150_000, 70_000], 1_420_000),
-        (7.5, [215_000, 161_250, 75_250], 1_526_500),
-        (100, [400_000, 300_000, 140_000], 2_840_000),
+        (0, [220_000, 165_000, 77_000], 1_562_000),
+        (7.5, [236_500, 177_375, 82_775], 1_679_150),
+        (100, [440_000, 330_000, 154_000], 3_124_000),
     ),
 )
 def test_custom_markup_reconciles_item_prices_amounts_and_total(
@@ -128,9 +133,7 @@ def test_custom_markup_reconciles_item_prices_amounts_and_total(
         assert isinstance(item["comparison"]["unit_price"], int)
         assert isinstance(item["comparison"]["supply_amount"], int)
     assert comparison["totals"]["comparison"]["supply_amount"] == total
-    assert total == sum(
-        item["comparison"]["supply_amount"] for item in items
-    )
+    assert total == sum(item["comparison"]["supply_amount"] for item in items)
 
 
 @pytest.mark.parametrize("percentage", (-1, 100.01, "NaN", None))
@@ -165,3 +168,45 @@ def test_markup_metadata_does_not_change_statement_quotation_or_vat():
     )
     comparison = engine.create_comparison(reviewed).data["document"]
     assert comparison["totals"]["base"]["vat"] == 142_000
+
+
+def test_current_two_item_invoice_marks_up_page_three_vat_included_lines():
+    invoice = _current_invoice()
+    invoice["document"]["items"] = [
+        {
+            "line_number": 1,
+            "description": "명함",
+            "quantity": 1,
+            "unit": "ea",
+            "unit_price": 18_000,
+            "supply_amount": 18_000,
+            "vat": 1_800,
+            "total": 19_800,
+        },
+        {
+            "line_number": 2,
+            "description": "회장 명패",
+            "quantity": 1,
+            "unit": "ea",
+            "unit_price": 272_727,
+            "supply_amount": 272_727,
+            "vat": 27_273,
+            "total": 300_000,
+        },
+    ]
+    invoice["document"]["totals"] = {
+        "supply_amount": 290_727,
+        "vat": 29_073,
+        "total": 319_800,
+    }
+    invoice["extensions"] = {"rmntc.comparison_markup_percentage": 10}
+
+    comparison = _engine().create_comparison(invoice).data["document"]
+
+    assert [
+        item["comparison"]["unit_price"] for item in comparison["items"]
+    ] == [21_780, 330_000]
+    assert [
+        item["comparison"]["supply_amount"] for item in comparison["items"]
+    ] == [21_780, 330_000]
+    assert comparison["totals"]["comparison"]["supply_amount"] == 351_780

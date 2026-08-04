@@ -25,8 +25,9 @@ def build_comparison_view_model(
             field: deepcopy(source_item[field])
             for field in ("unit_price", "supply_amount", "vat", "total")
         }
-        unit_price = apply_markup(source_item["unit_price"], pricing)
         quantity = Decimal(str(source_item["quantity"]))
+        quotation_unit_price = Decimal(str(source_item["total"])) / quantity
+        unit_price = apply_markup(quotation_unit_price, pricing)
         quantum = Decimal(1).scaleb(-pricing.decimal_places)
         supply_amount = (Decimal(str(unit_price)) * quantity).quantize(
             quantum,
