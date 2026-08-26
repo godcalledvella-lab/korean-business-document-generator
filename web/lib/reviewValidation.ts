@@ -25,7 +25,6 @@ const REQUIRED_RMNTC_STRINGS = new Set([
   "document.seller.address",
   "document.seller.business_type",
   "document.seller.business_item",
-  "document.seller.contact.email",
 ]);
 
 export function isRequiredReviewString(

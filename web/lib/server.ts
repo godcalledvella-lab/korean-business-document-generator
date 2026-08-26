@@ -72,7 +72,7 @@ function ocrWorker() {
     process.env.PYTHON_BIN || "python3",
     [
       "-u",
-      path.join(projectRoot, "web", "scripts", "extract_invoice.py"),
+      path.join(projectRoot, "web", "scripts", "extract_invoice_fixed.py"),
       "--worker",
       process.env.OCR_PROVIDER || "paddle",
     ],
