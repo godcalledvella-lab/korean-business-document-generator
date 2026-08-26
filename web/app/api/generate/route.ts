@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     if (!body.draft || typeof body.draft !== "object") {
       return NextResponse.json({ error: "Reviewed invoice JSON is required." }, { status: 400 });
     }
-    const result = await runPython("generate_documents.py", [
+    const result = await runPython("generate_documents_fixed.py", [
       path.join(sessionRoot, body.sessionId),
       JSON.stringify(body.draft),
     ]);
